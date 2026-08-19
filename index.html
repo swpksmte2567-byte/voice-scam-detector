@@ -110,6 +110,65 @@
   }
   @keyframes sway{ 0%,100%{ transform: scaleY(.35);} 50%{ transform: scaleY(1);} }
 
+  /* Divider */
+  .or-row{
+    display:flex; align-items:center; gap: 12px;
+    margin: 16px 0;
+    color: var(--muted);
+    font-size: 12.5px;
+    font-family: 'JetBrains Mono', monospace;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+  }
+  .or-row::before, .or-row::after{
+    content:""; flex:1; height:1px; background: var(--line);
+  }
+
+  /* Mic recording */
+  .record-box{
+    display:flex; align-items:center; justify-content:space-between;
+    gap: 14px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 16px 18px;
+    transition: border-color .2s ease, background .2s ease;
+  }
+  .record-box.live{
+    border-color: var(--danger);
+    background: linear-gradient(180deg, rgba(240,86,61,.10), var(--panel));
+  }
+  .record-left{ display:flex; align-items:center; gap:14px; min-width:0; }
+  .record-btn{
+    width: 48px; height: 48px; flex-shrink:0;
+    border-radius: 50%;
+    background: var(--panel-2);
+    border: 1.5px solid var(--line);
+    display:flex; align-items:center; justify-content:center;
+    cursor: pointer;
+    transition: background .15s ease, border-color .15s ease, transform .1s ease;
+  }
+  .record-btn:hover{ border-color: var(--amber-dim); }
+  .record-btn:active{ transform: scale(.94); }
+  .record-btn svg{ width:18px; height:18px; stroke: var(--danger); fill: var(--danger); }
+  .record-box.live .record-btn{
+    background: var(--danger); border-color: var(--danger);
+    animation: pulse 1.4s ease-in-out infinite;
+  }
+  .record-box.live .record-btn svg{ stroke:#fff; fill:#fff; }
+  @keyframes pulse{
+    0%,100%{ box-shadow: 0 0 0 0 rgba(240,86,61,.45); }
+    50%{ box-shadow: 0 0 0 8px rgba(240,86,61,0); }
+  }
+  .record-title{ font-weight:600; font-size:14.5px; }
+  .record-sub{ color: var(--muted); font-size: 12.5px; margin-top:2px; }
+  .record-time{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 15px; font-weight:600;
+    color: var(--muted); flex-shrink:0;
+  }
+  .record-box.live .record-time{ color: var(--danger); }
+
   /* File / player card */
   .card{
     display:none;
@@ -146,6 +205,11 @@
 
   audio{ width: 100%; height: 38px; margin-bottom: 18px; }
   audio::-webkit-media-controls-panel{ background: var(--panel-2); }
+  video{
+    width: 100%; max-height: 360px;
+    border-radius: 10px; margin-bottom: 18px;
+    background: #000; display:block;
+  }
 
   .analyze-btn{
     width:100%;
@@ -259,27 +323,43 @@
   <div class="wrap">
     <div class="eyebrow">Prototype · AI For Thai Hackathon #2</div>
     <h1>ตรวจจับเสียง<span>คอลเซนเตอร์</span>มิจฉาชีพ</h1>
-    <p class="lede">อัปโหลดไฟล์เสียงสนทนา ระบบจะวิเคราะห์ลักษณะน้ำเสียงและรูปแบบการพูดที่พบบ่อยในสายคอลเซนเตอร์หลอกลวง แล้วสรุปผลความเสี่ยงให้ทันที</p>
+    <p class="lede">อัปโหลดไฟล์เสียงหรือวิดีโอสนทนา หรือกดอัดเสียงจากไมค์โดยตรง ระบบจะวิเคราะห์ลักษณะน้ำเสียงและรูปแบบการพูดที่พบบ่อยในสายคอลเซนเตอร์หลอกลวง แล้วสรุปผลความเสี่ยงให้ทันที</p>
 
     <label class="dropzone" id="dropzone">
-      <input type="file" id="fileInput" accept="audio/*">
+      <input type="file" id="fileInput" accept="audio/*,video/*">
       <div class="mic-icon">
         <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a4 4 0 0 0-4 4v6a4 4 0 0 0 8 0V5a4 4 0 0 0-4-4z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/></svg>
       </div>
-      <div class="dz-title">ลากไฟล์เสียงมาวางที่นี่ หรือคลิกเพื่อเลือกไฟล์</div>
-      <div class="dz-sub">รองรับ <b>MP3, WAV, M4A</b> · ไฟล์เดียวต่อครั้ง</div>
+      <div class="dz-title">ลากไฟล์เสียง/วิดีโอมาวางที่นี่ หรือคลิกเพื่อเลือกไฟล์</div>
+      <div class="dz-sub">รองรับ <b>MP3, WAV, M4A, MP4, MOV</b> · ไฟล์เดียวต่อครั้ง</div>
       <div class="idle-wave" id="idleWave"></div>
     </label>
+
+    <div class="or-row"><span>หรือ</span></div>
+
+    <div class="record-box" id="recordBox">
+      <div class="record-left">
+        <button class="record-btn" id="recordBtn" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/></svg>
+        </button>
+        <div>
+          <div class="record-title" id="recordTitle">อัดเสียงจากไมโครโฟน</div>
+          <div class="record-sub" id="recordSub">กดปุ่มเพื่อเริ่มอัด แล้วกดอีกครั้งเพื่อหยุด</div>
+        </div>
+      </div>
+      <div class="record-time" id="recordTime">00:00</div>
+    </div>
 
     <div class="card" id="fileCard">
       <div class="file-row">
         <div class="file-meta">
-          <span class="badge">AUDIO</span>
+          <span class="badge" id="fileBadge">AUDIO</span>
           <span class="name" id="fileName">—</span>
         </div>
         <button class="remove-btn" id="removeBtn">เปลี่ยนไฟล์</button>
       </div>
-      <audio id="player" controls></audio>
+      <audio id="playerAudio" controls></audio>
+      <video id="playerVideo" controls playsinline style="display:none;"></video>
       <button class="analyze-btn" id="analyzeBtn">วิเคราะห์เสียงนี้</button>
       <div class="analyzing" id="analyzing">
         <div class="bars"><i></i><i></i><i></i><i></i><i></i></div>
@@ -290,7 +370,7 @@
     <div class="result" id="result"></div>
 
     <div class="note">
-      <b>หมายเหตุ:</b> หน้านี้เป็นส่วนหน้าบ้าน (frontend) ต้นแบบสำหรับ Demo เท่านั้น ผลวิเคราะห์ที่แสดงตอนนี้เป็นค่าจำลอง — ยังไม่ได้เชื่อมกับโมเดล LLM/เสียงจริง ขั้นต่อไปคือเชื่อม endpoint ที่รับไฟล์เสียงแล้วคืนค่าความเสี่ยงจริงจากฝั่ง backend
+      <b>หมายเหตุ:</b> หน้านี้เป็นส่วนหน้าบ้าน (frontend) ต้นแบบสำหรับ Demo เท่านั้น รองรับไฟล์เสียง วิดีโอ และอัดเสียงสดจากไมค์ในเบราว์เซอร์ (ต้องเข้าผ่าน HTTPS ไมค์ถึงจะทำงาน) แต่ผลวิเคราะห์ที่แสดงตอนนี้ยังเป็นค่าจำลอง — ยังไม่ได้เชื่อมกับโมเดล LLM/เสียงจริง ขั้นต่อไปคือเชื่อม endpoint ที่รับไฟล์แล้วคืนค่าความเสี่ยงจริงจากฝั่ง backend
     </div>
   </div>
 
@@ -304,8 +384,15 @@
   const fileInput = document.getElementById('fileInput');
   const fileCard = document.getElementById('fileCard');
   const fileName = document.getElementById('fileName');
-  const player = document.getElementById('player');
+  const fileBadge = document.getElementById('fileBadge');
+  const playerAudio = document.getElementById('playerAudio');
+  const playerVideo = document.getElementById('playerVideo');
   const removeBtn = document.getElementById('removeBtn');
+  const recordBox = document.getElementById('recordBox');
+  const recordBtn = document.getElementById('recordBtn');
+  const recordTitle = document.getElementById('recordTitle');
+  const recordSub = document.getElementById('recordSub');
+  const recordTime = document.getElementById('recordTime');
   const analyzeBtn = document.getElementById('analyzeBtn');
   const analyzing = document.getElementById('analyzing');
   const analyzingText = document.getElementById('analyzingText');
@@ -337,14 +424,24 @@
     if(f) handleFile(f);
   });
 
-  function handleFile(file){
-    if(!file.type.startsWith('audio/')){
-      alert('กรุณาเลือกไฟล์เสียง (MP3, WAV, M4A)');
+  function handleFile(file, sourceLabel){
+    const isAudio = file.type.startsWith('audio/');
+    const isVideo = file.type.startsWith('video/');
+    if(!isAudio && !isVideo){
+      alert('กรุณาเลือกไฟล์เสียงหรือวิดีโอ (MP3, WAV, M4A, MP4, MOV)');
       return;
     }
     currentFile = file;
     fileName.textContent = file.name;
-    player.src = URL.createObjectURL(file);
+    fileBadge.textContent = sourceLabel || (isVideo ? 'VIDEO' : 'AUDIO');
+    const url = URL.createObjectURL(file);
+    if(isVideo){
+      playerVideo.src = url; playerVideo.style.display = 'block';
+      playerAudio.removeAttribute('src'); playerAudio.style.display = 'none';
+    } else {
+      playerAudio.src = url; playerAudio.style.display = 'block';
+      playerVideo.removeAttribute('src'); playerVideo.style.display = 'none';
+    }
     fileCard.classList.add('show');
     result.classList.remove('show');
     result.innerHTML = '';
@@ -357,6 +454,63 @@
     fileCard.classList.remove('show');
     result.classList.remove('show');
     result.innerHTML = '';
+  });
+
+  /* ---------- Microphone recording ---------- */
+  let mediaRecorder = null;
+  let recordedChunks = [];
+  let recordStream = null;
+  let recordTimer = null;
+  let recordSeconds = 0;
+  let isRecording = false;
+
+  function formatTime(s){
+    const m = Math.floor(s/60).toString().padStart(2,'0');
+    const sec = (s%60).toString().padStart(2,'0');
+    return `${m}:${sec}`;
+  }
+
+  recordBtn.addEventListener('click', async () => {
+    if(!isRecording){
+      if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+        alert('เบราว์เซอร์นี้ไม่รองรับการอัดเสียงจากไมโครโฟน');
+        return;
+      }
+      try{
+        recordStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      }catch(err){
+        alert('ไม่สามารถเข้าถึงไมโครโฟนได้ กรุณาอนุญาตสิทธิ์การใช้ไมค์');
+        return;
+      }
+      recordedChunks = [];
+      mediaRecorder = new MediaRecorder(recordStream);
+      mediaRecorder.ondataavailable = e => { if(e.data.size > 0) recordedChunks.push(e.data); };
+      mediaRecorder.onstop = () => {
+        const blob = new Blob(recordedChunks, { type: 'audio/webm' });
+        const file = new File([blob], `mic-recording-${Date.now()}.webm`, { type: 'audio/webm' });
+        handleFile(file, 'MIC');
+        recordStream.getTracks().forEach(t => t.stop());
+      };
+      mediaRecorder.start();
+      isRecording = true;
+      recordSeconds = 0;
+      recordTime.textContent = formatTime(0);
+      recordBox.classList.add('live');
+      recordTitle.textContent = 'กำลังอัดเสียง…';
+      recordSub.textContent = 'กดปุ่มอีกครั้งเพื่อหยุดและวิเคราะห์';
+      recordTimer = setInterval(() => {
+        recordSeconds++;
+        recordTime.textContent = formatTime(recordSeconds);
+      }, 1000);
+    } else {
+      isRecording = false;
+      clearInterval(recordTimer);
+      recordBox.classList.remove('live');
+      recordTitle.textContent = 'อัดเสียงจากไมโครโฟน';
+      recordSub.textContent = 'กดปุ่มเพื่อเริ่มอัด แล้วกดอีกครั้งเพื่อหยุด';
+      recordTime.textContent = '00:00';
+      if(mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+    }
   });
 
   analyzeBtn.addEventListener('click', () => {
