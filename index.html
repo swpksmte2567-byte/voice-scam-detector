@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ตรวจจับเสียงคอลเซนเตอร์</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #0B1524;
+    --panel: #101F35;
+    --panel-2: #142842;
+    --line: #223652;
+    --text: #E9EEF5;
+    --muted: #8CA0B8;
+    --amber: #FFB238;
+    --amber-dim: #7A5A20;
+    --safe: #34D399;
+    --danger: #F0563D;
+    --radius: 14px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background: radial-gradient(1100px 600px at 15% -10%, #14263F 0%, var(--bg) 55%), var(--bg);
+    color: var(--text);
+    font-family: 'IBM Plex Sans Thai', sans-serif;
+    min-height: 100vh;
+    padding: 48px 20px 80px;
+  }
+  .wrap{ max-width: 760px; margin: 0 auto; }
+
+  .eyebrow{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 12px;
+    letter-spacing: .12em;
+    color: var(--amber);
+    text-transform: uppercase;
+    display:flex; align-items:center; gap:10px;
+    margin-bottom: 14px;
+  }
+  .eyebrow::before{
+    content:"";
+    width:8px; height:8px; border-radius:50%;
+    background: var(--amber);
+    box-shadow: 0 0 0 4px rgba(255,178,56,.15);
+  }
+
+  h1{
+    font-size: clamp(28px, 4.4vw, 40px);
+    line-height: 1.2;
+    margin: 0 0 12px;
+    font-weight: 700;
+    letter-spacing: -.01em;
+  }
+  h1 span{ color: var(--amber); }
+
+  p.lede{
+    color: var(--muted);
+    font-size: 16px;
+    line-height: 1.7;
+    max-width: 56ch;
+    margin: 0 0 40px;
+  }
+
+  /* Upload zone */
+  .dropzone{
+    position: relative;
+    border: 1.5px dashed var(--line);
+    border-radius: var(--radius);
+    background: var(--panel);
+    padding: 40px 24px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color .2s ease, background .2s ease, transform .15s ease;
+  }
+  .dropzone:hover{ border-color: var(--amber-dim); }
+  .dropzone.drag{
+    border-color: var(--amber);
+    background: var(--panel-2);
+    transform: scale(1.005);
+  }
+  .dropzone input{ display:none; }
+
+  .mic-icon{
+    width: 52px; height: 52px;
+    margin: 0 auto 18px;
+    border-radius: 50%;
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    display:flex; align-items:center; justify-content:center;
+  }
+  .mic-icon svg{ width:22px; height:22px; stroke: var(--amber); }
+
+  .dz-title{ font-weight:600; font-size:16px; margin-bottom:6px; }
+  .dz-sub{ color: var(--muted); font-size: 13.5px; }
+  .dz-sub b{ color: var(--text); font-weight:500; }
+
+  /* Waveform bars decoration inside dropzone (idle state) */
+  .idle-wave{
+    display:flex; align-items:flex-end; justify-content:center;
+    gap: 3px; height: 28px; margin: 22px 0 0;
+    opacity: .5;
+  }
+  .idle-wave i{
+    width: 3px; border-radius: 2px;
+    background: var(--muted);
+    animation: sway 1.8s ease-in-out infinite;
+  }
+  @keyframes sway{ 0%,100%{ transform: scaleY(.35);} 50%{ transform: scaleY(1);} }
+
+  /* File / player card */
+  .card{
+    display:none;
+    margin-top: 20px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 20px;
+  }
+  .card.show{ display:block; }
+  .file-row{
+    display:flex; align-items:center; justify-content:space-between;
+    gap: 12px; margin-bottom: 16px;
+  }
+  .file-meta{ display:flex; align-items:center; gap: 12px; min-width:0; }
+  .file-meta .badge{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 10px; color: var(--amber);
+    border: 1px solid var(--amber-dim);
+    padding: 3px 7px; border-radius: 6px;
+    flex-shrink:0;
+  }
+  .file-meta .name{
+    font-size: 14px; font-weight:500;
+    white-space: nowrap; overflow:hidden; text-overflow: ellipsis;
+  }
+  .remove-btn{
+    background:none; border:none; color: var(--muted);
+    cursor:pointer; font-size: 13px; font-family: inherit;
+    text-decoration: underline; text-underline-offset:3px;
+    flex-shrink:0;
+  }
+  .remove-btn:hover{ color: var(--text); }
+
+  audio{ width: 100%; height: 38px; margin-bottom: 18px; }
+  audio::-webkit-media-controls-panel{ background: var(--panel-2); }
+
+  .analyze-btn{
+    width:100%;
+    background: var(--amber);
+    color: #1A1200;
+    border: none;
+    border-radius: 10px;
+    padding: 14px 18px;
+    font-family: inherit;
+    font-weight: 700;
+    font-size: 15px;
+    cursor: pointer;
+    transition: filter .15s ease, transform .1s ease;
+  }
+  .analyze-btn:hover{ filter: brightness(1.08); }
+  .analyze-btn:active{ transform: scale(.995); }
+  .analyze-btn:disabled{
+    background: var(--line); color: var(--muted); cursor: not-allowed;
+  }
+
+  /* Analyzing state */
+  .analyzing{
+    display:none;
+    align-items:center; gap: 14px;
+    padding: 14px 4px 2px;
+    color: var(--muted);
+    font-size: 13.5px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .analyzing.show{ display:flex; }
+  .analyzing .bars{ display:flex; align-items:center; gap:3px; height:18px; }
+  .analyzing .bars i{
+    width:3px; border-radius:2px; background: var(--amber);
+    animation: bar 1s ease-in-out infinite;
+  }
+  .analyzing .bars i:nth-child(2){ animation-delay:.1s; }
+  .analyzing .bars i:nth-child(3){ animation-delay:.2s; }
+  .analyzing .bars i:nth-child(4){ animation-delay:.3s; }
+  .analyzing .bars i:nth-child(5){ animation-delay:.4s; }
+  @keyframes bar{ 0%,100%{ height: 4px; } 50%{ height: 18px; } }
+
+  /* Result */
+  .result{
+    display:none;
+    margin-top: 20px;
+    border-radius: var(--radius);
+    border: 1px solid var(--line);
+    overflow: hidden;
+    animation: rise .35s ease both;
+  }
+  .result.show{ display:block; }
+  @keyframes rise{ from{ opacity:0; transform: translateY(6px);} to{ opacity:1; transform:none; } }
+
+  .result-head{
+    padding: 22px 22px 18px;
+    display:flex; align-items:center; gap:16px;
+  }
+  .result-head.risk-high{ background: linear-gradient(180deg, rgba(240,86,61,.14), transparent); }
+  .result-head.risk-low{ background: linear-gradient(180deg, rgba(52,211,153,.12), transparent); }
+
+  .verdict-ring{
+    width: 64px; height: 64px; border-radius: 50%;
+    display:flex; align-items:center; justify-content:center;
+    font-family:'JetBrains Mono', monospace; font-weight:700; font-size: 16px;
+    flex-shrink:0; border: 2px solid;
+  }
+  .risk-high .verdict-ring{ border-color: var(--danger); color: var(--danger); }
+  .risk-low .verdict-ring{ border-color: var(--safe); color: var(--safe); }
+
+  .verdict-text .label{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 11px; letter-spacing:.1em; text-transform: uppercase;
+    color: var(--muted); margin-bottom:4px;
+  }
+  .verdict-text .title{ font-size: 19px; font-weight:700; }
+  .risk-high .verdict-text .title{ color: var(--danger); }
+  .risk-low .verdict-text .title{ color: var(--safe); }
+
+  .result-body{ padding: 4px 22px 22px; background: var(--panel); }
+  .signal-row{
+    display:flex; justify-content:space-between; align-items:center;
+    padding: 12px 0; border-top: 1px solid var(--line);
+    font-size: 14px;
+  }
+  .signal-row .k{ color: var(--muted); }
+  .signal-row .v{ font-family:'JetBrains Mono', monospace; font-weight:600; }
+  .v.flag{ color: var(--danger); }
+  .v.ok{ color: var(--safe); }
+
+  .note{
+    margin-top: 18px;
+    font-size: 12.5px;
+    color: var(--muted);
+    line-height: 1.6;
+    padding: 12px 14px;
+    background: var(--panel-2);
+    border-radius: 8px;
+    border: 1px solid var(--line);
+  }
+  .note b{ color: var(--text); }
+
+  footer{
+    max-width: 760px; margin: 40px auto 0;
+    color: var(--muted); font-size: 12px;
+    font-family: 'JetBrains Mono', monospace;
+    display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px;
+  }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="eyebrow">Prototype · AI For Thai Hackathon #2</div>
+    <h1>ตรวจจับเสียง<span>คอลเซนเตอร์</span>มิจฉาชีพ</h1>
+    <p class="lede">อัปโหลดไฟล์เสียงสนทนา ระบบจะวิเคราะห์ลักษณะน้ำเสียงและรูปแบบการพูดที่พบบ่อยในสายคอลเซนเตอร์หลอกลวง แล้วสรุปผลความเสี่ยงให้ทันที</p>
+
+    <label class="dropzone" id="dropzone">
+      <input type="file" id="fileInput" accept="audio/*">
+      <div class="mic-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a4 4 0 0 0-4 4v6a4 4 0 0 0 8 0V5a4 4 0 0 0-4-4z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/></svg>
+      </div>
+      <div class="dz-title">ลากไฟล์เสียงมาวางที่นี่ หรือคลิกเพื่อเลือกไฟล์</div>
+      <div class="dz-sub">รองรับ <b>MP3, WAV, M4A</b> · ไฟล์เดียวต่อครั้ง</div>
+      <div class="idle-wave" id="idleWave"></div>
+    </label>
+
+    <div class="card" id="fileCard">
+      <div class="file-row">
+        <div class="file-meta">
+          <span class="badge">AUDIO</span>
+          <span class="name" id="fileName">—</span>
+        </div>
+        <button class="remove-btn" id="removeBtn">เปลี่ยนไฟล์</button>
+      </div>
+      <audio id="player" controls></audio>
+      <button class="analyze-btn" id="analyzeBtn">วิเคราะห์เสียงนี้</button>
+      <div class="analyzing" id="analyzing">
+        <div class="bars"><i></i><i></i><i></i><i></i><i></i></div>
+        <span id="analyzingText">กำลังประมวลผลเสียง…</span>
+      </div>
+    </div>
+
+    <div class="result" id="result"></div>
+
+    <div class="note">
+      <b>หมายเหตุ:</b> หน้านี้เป็นส่วนหน้าบ้าน (frontend) ต้นแบบสำหรับ Demo เท่านั้น ผลวิเคราะห์ที่แสดงตอนนี้เป็นค่าจำลอง — ยังไม่ได้เชื่อมกับโมเดล LLM/เสียงจริง ขั้นต่อไปคือเชื่อม endpoint ที่รับไฟล์เสียงแล้วคืนค่าความเสี่ยงจริงจากฝั่ง backend
+    </div>
+  </div>
+
+  <footer>
+    <span>voice-scam-detector.html</span>
+    <span>build · deploy · demo</span>
+  </footer>
+
+<script>
+  const dropzone = document.getElementById('dropzone');
+  const fileInput = document.getElementById('fileInput');
+  const fileCard = document.getElementById('fileCard');
+  const fileName = document.getElementById('fileName');
+  const player = document.getElementById('player');
+  const removeBtn = document.getElementById('removeBtn');
+  const analyzeBtn = document.getElementById('analyzeBtn');
+  const analyzing = document.getElementById('analyzing');
+  const analyzingText = document.getElementById('analyzingText');
+  const result = document.getElementById('result');
+  const idleWave = document.getElementById('idleWave');
+
+  // decorative idle waveform bars
+  for(let i=0;i<28;i++){
+    const bar = document.createElement('i');
+    bar.style.height = (6 + Math.random()*22) + 'px';
+    bar.style.animationDelay = (Math.random()*1.8).toFixed(2) + 's';
+    idleWave.appendChild(bar);
+  }
+
+  let currentFile = null;
+
+  ['dragenter','dragover'].forEach(ev =>
+    dropzone.addEventListener(ev, e => { e.preventDefault(); dropzone.classList.add('drag'); })
+  );
+  ['dragleave','drop'].forEach(ev =>
+    dropzone.addEventListener(ev, e => { e.preventDefault(); dropzone.classList.remove('drag'); })
+  );
+  dropzone.addEventListener('drop', e => {
+    const f = e.dataTransfer.files[0];
+    if(f) handleFile(f);
+  });
+  fileInput.addEventListener('change', e => {
+    const f = e.target.files[0];
+    if(f) handleFile(f);
+  });
+
+  function handleFile(file){
+    if(!file.type.startsWith('audio/')){
+      alert('กรุณาเลือกไฟล์เสียง (MP3, WAV, M4A)');
+      return;
+    }
+    currentFile = file;
+    fileName.textContent = file.name;
+    player.src = URL.createObjectURL(file);
+    fileCard.classList.add('show');
+    result.classList.remove('show');
+    result.innerHTML = '';
+    fileCard.scrollIntoView({ behavior:'smooth', block:'nearest' });
+  }
+
+  removeBtn.addEventListener('click', () => {
+    currentFile = null;
+    fileInput.value = '';
+    fileCard.classList.remove('show');
+    result.classList.remove('show');
+    result.innerHTML = '';
+  });
+
+  analyzeBtn.addEventListener('click', () => {
+    if(!currentFile) return;
+    analyzeBtn.disabled = true;
+    analyzing.classList.add('show');
+    result.classList.remove('show');
+
+    const steps = ['กำลังตัดสัญญาณรบกวน…','กำลังถอดลักษณะน้ำเสียง…','กำลังเทียบรูปแบบสายหลอกลวง…'];
+    let i = 0;
+    const stepTimer = setInterval(() => {
+      analyzingText.textContent = steps[i % steps.length];
+      i++;
+    }, 700);
+
+    // NOTE: placeholder timing + mock result — replace with a real fetch()
+    // call to your detection API and render its actual response here.
+    setTimeout(() => {
+      clearInterval(stepTimer);
+      analyzing.classList.remove('show');
+      analyzeBtn.disabled = false;
+      renderResult(mockAnalyze(currentFile));
+    }, 2400);
+  });
+
+  function mockAnalyze(file){
+    // Simple placeholder heuristic just so the demo has varied output.
+    const seed = file.name.length + file.size % 97;
+    const score = seed % 100;
+    const isRisky = score > 45;
+    return {
+      risky: isRisky,
+      score: isRisky ? 60 + (score % 35) : 5 + (score % 30),
+      signals: [
+        { k: 'น้ำเสียงเร่งเร้า / สร้างความกดดัน', v: isRisky ? 'พบ' : 'ไม่พบ', flag: isRisky },
+        { k: 'คำที่มักใช้ในสายหลอกลวง (โอนเงิน/อายัดบัญชี)', v: isRisky ? 'พบ' : 'ไม่พบ', flag: isRisky },
+        { k: 'รูปแบบสคริปต์คอลเซนเตอร์', v: isRisky ? 'ตรงกับรูปแบบที่รู้จัก' : 'ไม่ตรงรูปแบบ', flag: isRisky },
+        { k: 'คุณภาพเสียง / ความยาวไฟล์', v: 'ปกติ', flag: false }
+      ]
+    };
+  }
+
+  function renderResult(r){
+    const cls = r.risky ? 'risk-high' : 'risk-low';
+    const title = r.risky ? 'เข้าข่ายคอลเซนเตอร์หลอกลวง' : 'ไม่พบสัญญาณผิดปกติ';
+    const label = r.risky ? 'ความเสี่ยงสูง' : 'ความเสี่ยงต่ำ';
+
+    result.innerHTML = `
+      <div class="result-head ${cls}">
+        <div class="verdict-ring">${r.score}%</div>
+        <div class="verdict-text">
+          <div class="label">${label}</div>
+          <div class="title">${title}</div>
+        </div>
+      </div>
+      <div class="result-body">
+        ${r.signals.map(s => `
+          <div class="signal-row">
+            <span class="k">${s.k}</span>
+            <span class="v ${s.flag ? 'flag' : 'ok'}">${s.v}</span>
+          </div>
+        `).join('')}
+      </div>
+    `;
+    result.classList.add('show');
+    result.scrollIntoView({ behavior:'smooth', block:'nearest' });
+  }
+</script>
+</body>
+</html>
