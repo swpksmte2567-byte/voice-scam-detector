@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ตรวจจับเสียงคอลเซนเตอร์</title>
+<title>ThaiGuard Call-Detector</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -16,6 +16,7 @@
     --muted: #8CA0B8;
     --amber: #FFB238;
     --amber-dim: #7A5A20;
+    --warn: #F0C419;
     --safe: #34D399;
     --danger: #F0563D;
     --radius: 14px;
@@ -23,384 +24,644 @@
   *{box-sizing:border-box;}
   html,body{margin:0;padding:0;}
   body{
-    background: radial-gradient(1100px 600px at 15% -10%, #14263F 0%, var(--bg) 55%), var(--bg);
+    background: var(--bg);
     color: var(--text);
     font-family: 'IBM Plex Sans Thai', sans-serif;
     min-height: 100vh;
-    padding: 48px 20px 80px;
   }
-  .wrap{ max-width: 760px; margin: 0 auto; }
+  a{ color: inherit; }
+  button{ font-family: inherit; }
 
-  .eyebrow{
-    font-family:'JetBrains Mono', monospace;
-    font-size: 12px;
-    letter-spacing: .12em;
-    color: var(--amber);
-    text-transform: uppercase;
-    display:flex; align-items:center; gap:10px;
-    margin-bottom: 14px;
+  /* ---------- Header ---------- */
+  header.topbar{
+    position: sticky; top:0; z-index: 40;
+    background: rgba(11,21,36,.92);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--line);
   }
-  .eyebrow::before{
-    content:"";
-    width:8px; height:8px; border-radius:50%;
-    background: var(--amber);
-    box-shadow: 0 0 0 4px rgba(255,178,56,.15);
+  .topbar-inner{
+    max-width: 1100px; margin: 0 auto;
+    display:flex; align-items:center; justify-content:space-between;
+    padding: 12px 18px; gap: 12px;
+  }
+  .brand{ display:flex; align-items:center; gap:10px; flex-shrink:0; }
+  .brand-mark{
+    width:32px; height:32px; border-radius:9px;
+    background: linear-gradient(135deg, var(--amber), #E8862B);
+    display:flex; align-items:center; justify-content:center;
+    font-weight:800; font-size:15px; color:#1A1200; flex-shrink:0;
+  }
+  .brand-name{ font-weight:700; font-size:15px; white-space:nowrap; }
+  .brand-sub{ font-size:10.5px; color:var(--muted); font-family:'JetBrains Mono',monospace; letter-spacing:.04em; }
+
+  nav.mainnav{
+    display:flex; gap: 4px; overflow-x:auto; scrollbar-width:none;
+    flex: 1; justify-content:center;
+  }
+  nav.mainnav::-webkit-scrollbar{ display:none; }
+  .navlink{
+    background:none; border:none; color: var(--muted);
+    font-size: 13px; font-weight:500; padding: 8px 12px;
+    border-radius: 8px; cursor:pointer; white-space:nowrap;
+    transition: background .15s ease, color .15s ease;
+  }
+  .navlink:hover{ color: var(--text); background: var(--panel); }
+  .navlink.active{ color: var(--amber); background: var(--panel-2); }
+
+  .utility{ display:flex; align-items:center; gap:6px; flex-shrink:0; position:relative; }
+  .icon-btn{
+    width:34px; height:34px; border-radius:9px;
+    background: var(--panel); border:1px solid var(--line);
+    display:flex; align-items:center; justify-content:center;
+    cursor:pointer; color: var(--muted); position:relative;
+  }
+  .icon-btn:hover{ color: var(--text); border-color: var(--amber-dim); }
+  .icon-btn svg{ width:16px; height:16px; stroke: currentColor; }
+  .notif-badge{
+    position:absolute; top:-4px; right:-4px;
+    background: var(--danger); color:#fff;
+    font-size: 9.5px; font-weight:700;
+    min-width:16px; height:16px; border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+    font-family:'JetBrains Mono',monospace;
+    border: 2px solid var(--bg);
+  }
+  .lang-toggle{
+    display:flex; background: var(--panel); border:1px solid var(--line);
+    border-radius:9px; overflow:hidden; font-size:11px; font-family:'JetBrains Mono',monospace;
+  }
+  .lang-toggle button{
+    background:none; border:none; color:var(--muted); padding:8px 9px; cursor:pointer;
+  }
+  .lang-toggle button.active{ background: var(--panel-2); color: var(--amber); }
+
+  .dropdown{
+    position:absolute; top: 42px; right:0;
+    background: var(--panel); border:1px solid var(--line);
+    border-radius: 10px; min-width: 200px;
+    box-shadow: 0 12px 32px rgba(0,0,0,.4);
+    display:none; z-index:50; overflow:hidden;
+  }
+  .dropdown.show{ display:block; }
+  .dropdown-item{
+    padding: 11px 14px; font-size:13px; cursor:pointer;
+    border-bottom: 1px solid var(--line);
+  }
+  .dropdown-item:last-child{ border-bottom:none; }
+  .dropdown-item:hover{ background: var(--panel-2); }
+  .dropdown-item .sub{ color:var(--muted); font-size:11.5px; margin-top:2px; }
+  .dropdown-title{ padding:10px 14px; font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); font-family:'JetBrains Mono',monospace; border-bottom:1px solid var(--line); }
+  .dropdown-empty{ padding:16px 14px; font-size:12.5px; color:var(--muted); }
+
+  /* ---------- Layout ---------- */
+  main{ max-width: 1100px; margin:0 auto; padding: 28px 18px 80px; }
+  .page{ display:none; }
+  .page.active{ display:block; }
+
+  h1.page-title{ font-size: clamp(22px,3.4vw,30px); font-weight:700; margin: 0 0 6px; letter-spacing:-.01em; }
+  p.page-sub{ color: var(--muted); font-size: 14.5px; line-height:1.7; max-width:64ch; margin: 0 0 26px; }
+
+  .section-label{
+    font-family:'JetBrains Mono', monospace; font-size: 11px;
+    letter-spacing:.1em; text-transform:uppercase; color: var(--amber);
+    display:flex; align-items:center; gap:8px; margin-bottom: 10px;
+  }
+  .section-label .zn{
+    width:18px; height:18px; border-radius:50%; border:1px solid var(--amber-dim);
+    display:flex; align-items:center; justify-content:center; font-size:10px; color:var(--amber);
   }
 
-  h1{
-    font-size: clamp(28px, 4.4vw, 40px);
-    line-height: 1.2;
-    margin: 0 0 12px;
-    font-weight: 700;
-    letter-spacing: -.01em;
-  }
-  h1 span{ color: var(--amber); }
+  /* ---------- Dashboard ---------- */
+  .stat-grid{ display:grid; grid-template-columns: repeat(auto-fit,minmax(140px,1fr)); gap:12px; margin-bottom: 26px; }
+  .stat-card{ background:var(--panel); border:1px solid var(--line); border-radius: var(--radius); padding:16px; }
+  .stat-num{ font-family:'JetBrains Mono',monospace; font-size:26px; font-weight:700; }
+  .stat-num.safe{ color:var(--safe); } .stat-num.warn{ color:var(--warn); } .stat-num.danger{ color:var(--danger); }
+  .stat-label{ font-size:12px; color:var(--muted); margin-top:4px; }
 
-  p.lede{
-    color: var(--muted);
-    font-size: 16px;
-    line-height: 1.7;
-    max-width: 56ch;
-    margin: 0 0 40px;
-  }
+  .recent-list{ background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); overflow:hidden; }
+  .recent-row{ display:flex; justify-content:space-between; align-items:center; padding:13px 16px; border-bottom:1px solid var(--line); font-size:13.5px; gap:10px; }
+  .recent-row:last-child{ border-bottom:none; }
+  .recent-name{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .recent-meta{ color:var(--muted); font-size:11.5px; font-family:'JetBrains Mono',monospace; flex-shrink:0; }
+  .tier-pill{ font-size:10.5px; font-weight:700; padding:3px 8px; border-radius:20px; font-family:'JetBrains Mono',monospace; flex-shrink:0; }
+  .tier-pill.safe{ background:rgba(52,211,153,.15); color:var(--safe); }
+  .tier-pill.warn{ background:rgba(240,196,25,.15); color:var(--warn); }
+  .tier-pill.danger{ background:rgba(240,86,61,.15); color:var(--danger); }
+  .empty-state{ padding: 30px 16px; text-align:center; color:var(--muted); font-size:13.5px; }
 
-  /* Upload zone */
+  /* ---------- Scanner zones ---------- */
+  .zone{ margin-bottom: 28px; }
+
+  .mode-tabs{ display:flex; gap:10px; }
+  .mode-tab{
+    flex:1; display:flex; flex-direction:column; align-items:flex-start; gap:2px; text-align:left;
+    background:var(--panel); border:1.5px solid var(--line); border-radius:10px; padding:12px 14px;
+    cursor:pointer; color:var(--text); transition: border-color .15s, background .15s;
+  }
+  .mode-tab:hover{ border-color: var(--amber-dim); }
+  .mode-tab.active{ border-color: var(--amber); background: var(--panel-2); }
+  .mode-tab-title{ font-weight:700; font-size:14px; display:flex; align-items:center; gap:6px; }
+  .mode-tab.active .mode-tab-title{ color: var(--amber); }
+  .mode-tab-sub{ font-size:11.5px; color:var(--muted); }
+
+  .analysis-mode-row{ display:flex; gap:10px; margin-top: 12px; }
+  .analysis-mode-row .mode-tab{ flex:1; }
+
   .dropzone{
-    position: relative;
-    border: 1.5px dashed var(--line);
-    border-radius: var(--radius);
-    background: var(--panel);
-    padding: 40px 24px;
-    text-align: center;
-    cursor: pointer;
-    transition: border-color .2s ease, background .2s ease, transform .15s ease;
+    position:relative; border:1.5px dashed var(--line); border-radius:var(--radius);
+    background:var(--panel); padding: 34px 22px; text-align:center; cursor:pointer;
+    transition: border-color .2s, background .2s, transform .15s;
   }
   .dropzone:hover{ border-color: var(--amber-dim); }
-  .dropzone.drag{
-    border-color: var(--amber);
-    background: var(--panel-2);
-    transform: scale(1.005);
-  }
+  .dropzone.drag{ border-color: var(--amber); background: var(--panel-2); transform: scale(1.004); }
   .dropzone input{ display:none; }
+  .mic-icon{ width:46px; height:46px; margin:0 auto 14px; border-radius:50%; background:var(--panel-2); border:1px solid var(--line); display:flex; align-items:center; justify-content:center; }
+  .mic-icon svg{ width:20px; height:20px; stroke: var(--amber); }
+  .dz-title{ font-weight:600; font-size:15px; margin-bottom:5px; }
+  .dz-sub{ color:var(--muted); font-size:13px; }
+  .dz-sub b{ color:var(--text); font-weight:500; }
 
-  .mic-icon{
-    width: 52px; height: 52px;
-    margin: 0 auto 18px;
-    border-radius: 50%;
-    background: var(--panel-2);
-    border: 1px solid var(--line);
-    display:flex; align-items:center; justify-content:center;
-  }
-  .mic-icon svg{ width:22px; height:22px; stroke: var(--amber); }
+  .record-panel{ display:none; }
+  .record-panel.show{ display:block; }
+  .upload-panel{ display:block; }
+  .upload-panel.hide{ display:none; }
 
-  .dz-title{ font-weight:600; font-size:16px; margin-bottom:6px; }
-  .dz-sub{ color: var(--muted); font-size: 13.5px; }
-  .dz-sub b{ color: var(--text); font-weight:500; }
-
-  /* Waveform bars decoration inside dropzone (idle state) */
-  .idle-wave{
-    display:flex; align-items:flex-end; justify-content:center;
-    gap: 3px; height: 28px; margin: 22px 0 0;
-    opacity: .5;
-  }
-  .idle-wave i{
-    width: 3px; border-radius: 2px;
-    background: var(--muted);
-    animation: sway 1.8s ease-in-out infinite;
-  }
-  @keyframes sway{ 0%,100%{ transform: scaleY(.35);} 50%{ transform: scaleY(1);} }
-
-  /* Divider */
-  .or-row{
-    display:flex; align-items:center; gap: 12px;
-    margin: 16px 0;
-    color: var(--muted);
-    font-size: 12.5px;
-    font-family: 'JetBrains Mono', monospace;
-    text-transform: uppercase;
-    letter-spacing: .08em;
-  }
-  .or-row::before, .or-row::after{
-    content:""; flex:1; height:1px; background: var(--line);
-  }
-
-  /* Mic recording */
-  .record-box{
-    display:flex; align-items:center; justify-content:space-between;
-    gap: 14px;
-    background: var(--panel);
-    border: 1px solid var(--line);
-    border-radius: var(--radius);
-    padding: 16px 18px;
-    transition: border-color .2s ease, background .2s ease;
-  }
-  .record-box.live{
-    border-color: var(--danger);
-    background: linear-gradient(180deg, rgba(240,86,61,.10), var(--panel));
-  }
+  .record-box{ display:flex; align-items:center; justify-content:space-between; gap:14px; background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:20px; }
+  .record-box.live{ border-color: var(--danger); background: linear-gradient(180deg, rgba(240,86,61,.10), var(--panel)); }
   .record-left{ display:flex; align-items:center; gap:14px; min-width:0; }
-  .record-btn{
-    width: 48px; height: 48px; flex-shrink:0;
-    border-radius: 50%;
-    background: var(--panel-2);
-    border: 1.5px solid var(--line);
-    display:flex; align-items:center; justify-content:center;
-    cursor: pointer;
-    transition: background .15s ease, border-color .15s ease, transform .1s ease;
-  }
+  .record-btn{ width:54px; height:54px; flex-shrink:0; border-radius:50%; background:var(--panel-2); border:1.5px solid var(--line); display:flex; align-items:center; justify-content:center; cursor:pointer; transition: background .15s, border-color .15s, transform .1s; }
   .record-btn:hover{ border-color: var(--amber-dim); }
   .record-btn:active{ transform: scale(.94); }
-  .record-btn svg{ width:18px; height:18px; stroke: var(--danger); fill: var(--danger); }
-  .record-box.live .record-btn{
-    background: var(--danger); border-color: var(--danger);
-    animation: pulse 1.4s ease-in-out infinite;
-  }
+  .record-btn svg{ width:20px; height:20px; stroke: var(--danger); fill: var(--danger); }
+  .record-box.live .record-btn{ background: var(--danger); border-color: var(--danger); animation: pulse 1.4s ease-in-out infinite; }
   .record-box.live .record-btn svg{ stroke:#fff; fill:#fff; }
-  @keyframes pulse{
-    0%,100%{ box-shadow: 0 0 0 0 rgba(240,86,61,.45); }
-    50%{ box-shadow: 0 0 0 8px rgba(240,86,61,0); }
-  }
-  .record-title{ font-weight:600; font-size:14.5px; }
-  .record-sub{ color: var(--muted); font-size: 12.5px; margin-top:2px; }
-  .record-time{
-    font-family:'JetBrains Mono', monospace;
-    font-size: 15px; font-weight:600;
-    color: var(--muted); flex-shrink:0;
-  }
+  @keyframes pulse{ 0%,100%{ box-shadow:0 0 0 0 rgba(240,86,61,.45);} 50%{ box-shadow:0 0 0 9px rgba(240,86,61,0);} }
+  .record-title{ font-weight:600; font-size:15px; }
+  .record-sub{ color:var(--muted); font-size:12.5px; margin-top:2px; }
+  .record-time{ font-family:'JetBrains Mono',monospace; font-size:17px; font-weight:600; color:var(--muted); flex-shrink:0; }
   .record-box.live .record-time{ color: var(--danger); }
 
-  /* File / player card */
-  .card{
-    display:none;
-    margin-top: 20px;
-    background: var(--panel);
-    border: 1px solid var(--line);
-    border-radius: var(--radius);
-    padding: 20px;
-  }
+  .card{ display:none; margin-top:18px; background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:20px; }
   .card.show{ display:block; }
-  .file-row{
-    display:flex; align-items:center; justify-content:space-between;
-    gap: 12px; margin-bottom: 16px;
-  }
-  .file-meta{ display:flex; align-items:center; gap: 12px; min-width:0; }
-  .file-meta .badge{
-    font-family:'JetBrains Mono', monospace;
-    font-size: 10px; color: var(--amber);
-    border: 1px solid var(--amber-dim);
-    padding: 3px 7px; border-radius: 6px;
-    flex-shrink:0;
-  }
-  .file-meta .name{
-    font-size: 14px; font-weight:500;
-    white-space: nowrap; overflow:hidden; text-overflow: ellipsis;
-  }
-  .remove-btn{
-    background:none; border:none; color: var(--muted);
-    cursor:pointer; font-size: 13px; font-family: inherit;
-    text-decoration: underline; text-underline-offset:3px;
-    flex-shrink:0;
-  }
+  .file-row{ display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:16px; }
+  .file-meta{ display:flex; align-items:center; gap:12px; min-width:0; }
+  .file-meta .badge{ font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--amber); border:1px solid var(--amber-dim); padding:3px 7px; border-radius:6px; flex-shrink:0; }
+  .file-meta .name{ font-size:14px; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .remove-btn{ background:none; border:none; color:var(--muted); cursor:pointer; font-size:13px; text-decoration:underline; text-underline-offset:3px; flex-shrink:0; }
   .remove-btn:hover{ color: var(--text); }
+  audio{ width:100%; height:38px; margin-bottom:18px; }
+  video{ width:100%; max-height:340px; border-radius:10px; margin-bottom:18px; background:#000; display:block; }
 
-  audio{ width: 100%; height: 38px; margin-bottom: 18px; }
-  audio::-webkit-media-controls-panel{ background: var(--panel-2); }
-  video{
-    width: 100%; max-height: 360px;
-    border-radius: 10px; margin-bottom: 18px;
-    background: #000; display:block;
-  }
-
-  .analyze-btn{
-    width:100%;
-    background: var(--amber);
-    color: #1A1200;
-    border: none;
-    border-radius: 10px;
-    padding: 14px 18px;
-    font-family: inherit;
-    font-weight: 700;
-    font-size: 15px;
-    cursor: pointer;
-    transition: filter .15s ease, transform .1s ease;
-  }
+  .analyze-btn{ width:100%; background: var(--amber); color:#1A1200; border:none; border-radius:10px; padding:14px 18px; font-weight:700; font-size:15px; cursor:pointer; transition: filter .15s, transform .1s; }
   .analyze-btn:hover{ filter: brightness(1.08); }
   .analyze-btn:active{ transform: scale(.995); }
-  .analyze-btn:disabled{
-    background: var(--line); color: var(--muted); cursor: not-allowed;
-  }
+  .analyze-btn:disabled{ background: var(--line); color:var(--muted); cursor:not-allowed; }
 
-  /* Analyzing state */
-  .analyzing{
-    display:none;
-    align-items:center; gap: 14px;
-    padding: 14px 4px 2px;
-    color: var(--muted);
-    font-size: 13.5px;
-    font-family: 'JetBrains Mono', monospace;
-  }
+  .analyzing{ display:none; align-items:center; gap:14px; padding:14px 4px 2px; color:var(--muted); font-size:13.5px; font-family:'JetBrains Mono',monospace; }
   .analyzing.show{ display:flex; }
   .analyzing .bars{ display:flex; align-items:center; gap:3px; height:18px; }
-  .analyzing .bars i{
-    width:3px; border-radius:2px; background: var(--amber);
-    animation: bar 1s ease-in-out infinite;
-  }
-  .analyzing .bars i:nth-child(2){ animation-delay:.1s; }
-  .analyzing .bars i:nth-child(3){ animation-delay:.2s; }
-  .analyzing .bars i:nth-child(4){ animation-delay:.3s; }
-  .analyzing .bars i:nth-child(5){ animation-delay:.4s; }
-  @keyframes bar{ 0%,100%{ height: 4px; } 50%{ height: 18px; } }
+  .analyzing .bars i{ width:3px; border-radius:2px; background: var(--amber); animation: bar 1s ease-in-out infinite; }
+  .analyzing .bars i:nth-child(2){ animation-delay:.1s; } .analyzing .bars i:nth-child(3){ animation-delay:.2s; }
+  .analyzing .bars i:nth-child(4){ animation-delay:.3s; } .analyzing .bars i:nth-child(5){ animation-delay:.4s; }
+  @keyframes bar{ 0%,100%{ height:4px; } 50%{ height:18px; } }
 
-  /* Result */
-  .result{
-    display:none;
-    margin-top: 20px;
-    border-radius: var(--radius);
-    border: 1px solid var(--line);
-    overflow: hidden;
-    animation: rise .35s ease both;
-  }
-  .result.show{ display:block; }
-  @keyframes rise{ from{ opacity:0; transform: translateY(6px);} to{ opacity:1; transform:none; } }
+  /* ---------- Result: gauge + zones 3/4 ---------- */
+  .result{ display:none; margin-top:18px; }
+  .result.show{ display:block; animation: rise .35s ease both; }
+  @keyframes rise{ from{opacity:0; transform:translateY(6px);} to{opacity:1; transform:none;} }
 
-  .result-head{
-    padding: 22px 22px 18px;
-    display:flex; align-items:center; gap:16px;
-  }
-  .result-head.risk-high{ background: linear-gradient(180deg, rgba(240,86,61,.14), transparent); }
-  .result-head.risk-low{ background: linear-gradient(180deg, rgba(52,211,153,.12), transparent); }
-
-  .verdict-ring{
-    width: 64px; height: 64px; border-radius: 50%;
-    display:flex; align-items:center; justify-content:center;
-    font-family:'JetBrains Mono', monospace; font-weight:700; font-size: 16px;
-    flex-shrink:0; border: 2px solid;
-  }
-  .risk-high .verdict-ring{ border-color: var(--danger); color: var(--danger); }
-  .risk-low .verdict-ring{ border-color: var(--safe); color: var(--safe); }
-
-  .verdict-text .label{
-    font-family:'JetBrains Mono', monospace;
-    font-size: 11px; letter-spacing:.1em; text-transform: uppercase;
-    color: var(--muted); margin-bottom:4px;
-  }
-  .verdict-text .title{ font-size: 19px; font-weight:700; }
-  .risk-high .verdict-text .title{ color: var(--danger); }
-  .risk-low .verdict-text .title{ color: var(--safe); }
+  .gauge-card{ border-radius:var(--radius); border:1px solid var(--line); overflow:hidden; }
+  .gauge-head{ padding:22px; display:flex; align-items:center; gap:16px; }
+  .gauge-head.safe{ background: linear-gradient(180deg, rgba(52,211,153,.12), transparent); }
+  .gauge-head.warn{ background: linear-gradient(180deg, rgba(240,196,25,.14), transparent); }
+  .gauge-head.danger{ background: linear-gradient(180deg, rgba(240,86,61,.14), transparent); }
+  .verdict-ring{ width:64px; height:64px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-family:'JetBrains Mono',monospace; font-weight:700; font-size:16px; flex-shrink:0; border:2px solid; }
+  .gauge-head.safe .verdict-ring{ border-color:var(--safe); color:var(--safe); }
+  .gauge-head.warn .verdict-ring{ border-color:var(--warn); color:var(--warn); }
+  .gauge-head.danger .verdict-ring{ border-color:var(--danger); color:var(--danger); }
+  .verdict-text .label{ font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); margin-bottom:4px; }
+  .verdict-text .title{ font-size:19px; font-weight:700; }
+  .gauge-head.safe .title{ color:var(--safe); } .gauge-head.warn .title{ color:var(--warn); } .gauge-head.danger .title{ color:var(--danger); }
+  .gauge-bar{ height:8px; background:var(--panel-2); margin:0 22px 20px; border-radius:6px; overflow:hidden; }
+  .gauge-fill{ height:100%; border-radius:6px; transition: width .5s ease; }
+  .gauge-fill.safe{ background: var(--safe); } .gauge-fill.warn{ background: var(--warn); } .gauge-fill.danger{ background: var(--danger); }
 
   .result-body{ padding: 4px 22px 22px; background: var(--panel); }
-  .signal-row{
-    display:flex; justify-content:space-between; align-items:center;
-    padding: 12px 0; border-top: 1px solid var(--line);
-    font-size: 14px;
-  }
-  .signal-row .k{ color: var(--muted); }
-  .signal-row .v{ font-family:'JetBrains Mono', monospace; font-weight:600; }
-  .v.flag{ color: var(--danger); }
-  .v.ok{ color: var(--safe); }
+  .signal-row{ display:flex; justify-content:space-between; align-items:center; padding:12px 0; border-top:1px solid var(--line); font-size:14px; }
+  .signal-row .k{ color:var(--muted); } .signal-row .v{ font-family:'JetBrains Mono',monospace; font-weight:600; }
+  .v.flag{ color: var(--danger); } .v.ok{ color: var(--safe); }
 
-  .transcript-box{
-    margin: 0 22px 22px;
-    padding: 14px 16px;
-    background: var(--panel-2);
-    border: 1px solid var(--line);
-    border-radius: 10px;
-  }
-  .transcript-label{
-    font-family:'JetBrains Mono', monospace;
-    font-size: 11px; letter-spacing:.08em; text-transform: uppercase;
-    color: var(--amber); margin-bottom: 8px;
-  }
-  .transcript-text{
-    font-size: 14px; line-height: 1.7; color: var(--text);
-    white-space: pre-wrap; margin: 0;
-  }
-  .transcript-empty{
-    font-size: 13px; line-height: 1.6; color: var(--muted);
-    margin: 0;
-  }
+  .transcript-box{ margin:0 22px 18px; padding:14px 16px; background:var(--panel-2); border:1px solid var(--line); border-radius:10px; }
+  .transcript-label{ font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--amber); margin-bottom:8px; }
+  .transcript-text{ font-size:14px; line-height:1.8; color:var(--text); white-space:pre-wrap; margin:0; }
+  .transcript-empty{ font-size:13px; line-height:1.6; color:var(--muted); margin:0; }
+  .transcript-text mark{ background: rgba(240,86,61,.28); color:#fff; padding:1px 3px; border-radius:4px; }
 
-  .note{
-    margin-top: 18px;
-    font-size: 12.5px;
-    color: var(--muted);
-    line-height: 1.6;
-    padding: 12px 14px;
-    background: var(--panel-2);
-    border-radius: 8px;
-    border: 1px solid var(--line);
-  }
+  .insight-box{ margin:0 22px 18px; padding:14px 16px; background:var(--panel-2); border:1px solid var(--line); border-radius:10px; }
+  .insight-label{ font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--amber); margin-bottom:10px; }
+  .tag-row{ display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px; }
+  .tag{ font-size:11.5px; padding:4px 10px; border-radius:20px; background: rgba(240,86,61,.15); color: var(--danger); border:1px solid rgba(240,86,61,.35); }
+  .tag.none{ background: var(--panel); color: var(--muted); border-color: var(--line); }
+  .context-line{ font-size:13px; color:var(--text); line-height:1.6; }
+  .context-line b{ color: var(--amber); }
+
+  .reco-box{ margin: 0 22px 4px; padding: 16px; background: rgba(240,86,61,.08); border:1px solid rgba(240,86,61,.25); border-radius:10px; }
+  .reco-title{ font-weight:700; font-size:13.5px; margin-bottom:8px; }
+  .reco-list{ margin:0; padding-left:0; list-style:none; font-size:13px; line-height:2; color: var(--text); }
+
+  .quick-actions{ display:flex; gap:8px; flex-wrap:wrap; padding: 16px 22px 22px; }
+  .qa-btn{ flex:1; min-width:140px; background:var(--panel-2); border:1px solid var(--line); border-radius:9px; padding:11px 12px; font-size:12.5px; font-weight:600; color:var(--text); cursor:pointer; text-align:center; }
+  .qa-btn:hover{ border-color: var(--amber-dim); }
+  .qa-btn.report{ border-color: rgba(240,86,61,.4); color: var(--danger); }
+
+  .note{ margin-top:18px; font-size:12.5px; color:var(--muted); line-height:1.6; padding:12px 14px; background:var(--panel-2); border-radius:8px; border:1px solid var(--line); }
   .note b{ color: var(--text); }
 
-  footer{
-    max-width: 760px; margin: 40px auto 0;
-    color: var(--muted); font-size: 12px;
-    font-family: 'JetBrains Mono', monospace;
-    display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px;
+  /* ---------- History page ---------- */
+  .filter-row{ display:flex; gap:10px; margin-bottom:16px; flex-wrap:wrap; }
+  .filter-row select{ background:var(--panel); border:1px solid var(--line); color:var(--text); padding:9px 10px; border-radius:8px; font-size:13px; font-family:inherit; }
+  table.history-table{ width:100%; border-collapse:collapse; background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); overflow:hidden; font-size:13px; }
+  table.history-table th{ text-align:left; padding:11px 12px; color:var(--muted); font-weight:600; font-size:11.5px; text-transform:uppercase; letter-spacing:.04em; border-bottom:1px solid var(--line); font-family:'JetBrains Mono',monospace; }
+  table.history-table td{ padding:11px 12px; border-bottom:1px solid var(--line); vertical-align:middle; }
+  table.history-table tr:last-child td{ border-bottom:none; }
+  .hist-clear{ background:none; border:1px solid var(--line); color:var(--muted); padding:8px 12px; border-radius:8px; font-size:12.5px; cursor:pointer; margin-bottom:16px; }
+  .hist-clear:hover{ color: var(--danger); border-color: var(--danger); }
+
+  /* ---------- Keywords page ---------- */
+  .kw-grid{ display:grid; grid-template-columns: repeat(auto-fit,minmax(240px,1fr)); gap:14px; }
+  .kw-card{ background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:16px; }
+  .kw-card h3{ margin:0 0 8px; font-size:14.5px; color: var(--amber); }
+  .kw-card p{ margin:0 0 10px; font-size:12.5px; color:var(--muted); line-height:1.6; }
+  .kw-tags{ display:flex; flex-wrap:wrap; gap:6px; }
+
+  /* ---------- Report page ---------- */
+  .report-hotline{ display:flex; align-items:center; gap:16px; background: rgba(240,86,61,.1); border:1px solid rgba(240,86,61,.3); border-radius:var(--radius); padding:18px; margin-bottom:22px; }
+  .hotline-num{ font-family:'JetBrains Mono',monospace; font-size:26px; font-weight:700; color: var(--danger); }
+  .hotline-call{ background: var(--danger); color:#fff; border:none; padding:10px 18px; border-radius:8px; font-weight:700; font-size:13.5px; cursor:pointer; text-decoration:none; display:inline-block; }
+  form.report-form{ background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:20px; display:flex; flex-direction:column; gap:14px; }
+  .field label{ display:block; font-size:12.5px; color:var(--muted); margin-bottom:6px; }
+  .field input, .field textarea{ width:100%; background:var(--panel-2); border:1px solid var(--line); color:var(--text); border-radius:8px; padding:10px 12px; font-family:inherit; font-size:13.5px; resize:vertical; }
+  .field textarea{ min-height:90px; }
+  .submit-btn{ background: var(--amber); color:#1A1200; border:none; border-radius:9px; padding:13px; font-weight:700; font-size:14px; cursor:pointer; }
+
+  /* ---------- Settings page ---------- */
+  .settings-block{ background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:20px; margin-bottom:16px; }
+  .settings-block h3{ margin:0 0 4px; font-size:14.5px; }
+  .settings-block .hint{ color:var(--muted); font-size:12px; margin-bottom:14px; }
+  .slider-row{ display:flex; align-items:center; gap:14px; }
+  .slider-row input[type=range]{ flex:1; accent-color: var(--amber); }
+  .slider-val{ font-family:'JetBrains Mono',monospace; font-size:13px; color:var(--amber); width:42px; text-align:right; }
+  .toggle-row{ display:flex; align-items:center; justify-content:space-between; padding:10px 0; border-top:1px solid var(--line); font-size:13.5px; }
+  .toggle-row:first-of-type{ border-top:none; }
+  .switch{ width:38px; height:22px; background:var(--panel-2); border:1px solid var(--line); border-radius:20px; position:relative; cursor:pointer; flex-shrink:0; }
+  .switch::after{ content:""; position:absolute; top:2px; left:2px; width:16px; height:16px; border-radius:50%; background:var(--muted); transition: transform .15s, background .15s; }
+  .switch.on{ border-color: var(--amber-dim); }
+  .switch.on::after{ transform: translateX(16px); background: var(--amber); }
+  .disabled-note{ font-size:11px; color:var(--muted); font-style:italic; }
+
+  footer.pagefoot{ max-width:1100px; margin:0 auto; padding: 0 18px 40px; color:var(--muted); font-size:12px; font-family:'JetBrains Mono',monospace; display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px; }
+
+  @media print{
+    header.topbar, nav.mainnav, .utility, .zone:not(.print-zone), footer.pagefoot, .quick-actions, .analyze-btn{ display:none !important; }
+    body{ background:#fff; color:#000; }
   }
 </style>
 </head>
 <body>
-  <div class="wrap">
-    <div class="eyebrow">Prototype · AI For Thai Hackathon #2</div>
-    <h1>ตรวจจับเสียง<span>คอลเซนเตอร์</span>มิจฉาชีพ</h1>
-    <p class="lede">อัปโหลดไฟล์เสียงหรือวิดีโอสนทนา หรือกดอัดเสียงจากไมค์โดยตรง ระบบจะวิเคราะห์ลักษณะน้ำเสียงและรูปแบบการพูดที่พบบ่อยในสายคอลเซนเตอร์หลอกลวง แล้วสรุปผลความเสี่ยงให้ทันที</p>
 
-    <label class="dropzone" id="dropzone">
-      <input type="file" id="fileInput" accept="audio/*,video/*">
-      <div class="mic-icon">
-        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a4 4 0 0 0-4 4v6a4 4 0 0 0 8 0V5a4 4 0 0 0-4-4z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/></svg>
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="brand">
+      <div class="brand-mark">TG</div>
+      <div>
+        <div class="brand-name">ThaiGuard Call-Detector</div>
+        <div class="brand-sub">Anti-Scam Audio AI</div>
       </div>
-      <div class="dz-title">ลากไฟล์เสียง/วิดีโอมาวางที่นี่ หรือคลิกเพื่อเลือกไฟล์</div>
-      <div class="dz-sub">รองรับ <b>MP3, WAV, M4A, MP4, MOV</b> · ไฟล์เดียวต่อครั้ง</div>
-      <div class="idle-wave" id="idleWave"></div>
-    </label>
-
-    <div class="or-row"><span>หรือ</span></div>
-
-    <div class="record-box" id="recordBox">
-      <div class="record-left">
-        <button class="record-btn" id="recordBtn" type="button">
-          <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/></svg>
+    </div>
+    <nav class="mainnav" id="mainNav">
+      <button class="navlink" data-page="dashboard">แดชบอร์ด</button>
+      <button class="navlink active" data-page="scanner">ตรวจจับเสียง</button>
+      <button class="navlink" data-page="history">ประวัติ</button>
+      <button class="navlink" data-page="keywords">คลังคำเสี่ยง</button>
+      <button class="navlink" data-page="report">แจ้งเบาะแส</button>
+    </nav>
+    <div class="utility">
+      <div class="lang-toggle">
+        <button data-lang="th" class="active" id="langThBtn">TH</button>
+        <button data-lang="en" id="langEnBtn">EN</button>
+      </div>
+      <div style="position:relative;">
+        <button class="icon-btn" id="notifBtn" title="แจ้งเตือน">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+          <span class="notif-badge" id="notifBadge" style="display:none;">0</span>
         </button>
-        <div>
-          <div class="record-title" id="recordTitle">อัดเสียงจากไมโครโฟน</div>
-          <div class="record-sub" id="recordSub">กดปุ่มเพื่อเริ่มอัด แล้วกดอีกครั้งเพื่อหยุด</div>
+        <div class="dropdown" id="notifDropdown">
+          <div class="dropdown-title">แจ้งเตือนความเสี่ยงสูงล่าสุด</div>
+          <div id="notifList"><div class="dropdown-empty">ยังไม่มีรายการ</div></div>
         </div>
       </div>
-      <div class="record-time" id="recordTime">00:00</div>
-    </div>
-
-    <div class="card" id="fileCard">
-      <div class="file-row">
-        <div class="file-meta">
-          <span class="badge" id="fileBadge">AUDIO</span>
-          <span class="name" id="fileName">—</span>
+      <div style="position:relative;">
+        <button class="icon-btn" id="profileBtn" title="โปรไฟล์">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>
+        </button>
+        <div class="dropdown" id="profileDropdown">
+          <div class="dropdown-item" data-page="settings">ตั้งค่า (Settings)<div class="sub">ความไวการตรวจจับ, ภาษา, API</div></div>
+          <div class="dropdown-item" id="logoutItem">ออกจากระบบ<div class="sub">Demo เท่านั้น — ยังไม่มีระบบบัญชีจริง</div></div>
         </div>
-        <button class="remove-btn" id="removeBtn">เปลี่ยนไฟล์</button>
       </div>
-      <audio id="playerAudio" controls></audio>
-      <video id="playerVideo" controls playsinline style="display:none;"></video>
-      <button class="analyze-btn" id="analyzeBtn">วิเคราะห์เสียงนี้</button>
-      <div class="analyzing" id="analyzing">
-        <div class="bars"><i></i><i></i><i></i><i></i><i></i></div>
-        <span id="analyzingText">กำลังประมวลผลเสียง…</span>
-      </div>
-    </div>
-
-    <div class="result" id="result"></div>
-
-    <div class="note">
-      <b>หมายเหตุ:</b> หน้านี้เป็นส่วนหน้าบ้าน (frontend) ต้นแบบสำหรับ Demo รองรับไฟล์เสียง วิดีโอ และอัดเสียงสดจากไมค์ (ต้องเข้าผ่าน HTTPS ไมค์ถึงจะทำงาน) ผลวิเคราะห์คำนวณจาก <b>ลักษณะคลื่นเสียงจริง</b> ในไฟล์ (ความดัง ความผันผวนของโทนเสียง สัดส่วนช่วงเงียบ จังหวะการพูด) ผ่าน Web Audio API — แต่ยัง <b>ไม่ใช่การถอดคำพูดหรือวิเคราะห์เนื้อหาจริง</b> ขั้นต่อไปคือเชื่อม speech-to-text + LLM backend เพื่อจับคำพูด/รูปแบบสคริปต์หลอกลวงได้แม่นยำขึ้น
     </div>
   </div>
+</header>
 
-  <footer>
-    <span>voice-scam-detector.html</span>
-    <span>build · deploy · demo</span>
-  </footer>
+<main>
+
+  <!-- ============ DASHBOARD ============ -->
+  <section class="page" id="page-dashboard">
+    <h1 class="page-title" data-i18n="dash_title">ภาพรวมระบบ</h1>
+    <p class="page-sub" data-i18n="dash_sub">สรุปสถิติการตรวจจับเสียงคอลเซนเตอร์และคำเตือนภัยล่าสุดจากประวัติการใช้งานบนเครื่องนี้</p>
+
+    <div class="stat-grid">
+      <div class="stat-card"><div class="stat-num" id="statTotal">0</div><div class="stat-label">ตรวจสอบทั้งหมด</div></div>
+      <div class="stat-card"><div class="stat-num safe" id="statSafe">0</div><div class="stat-label">ปลอดภัย</div></div>
+      <div class="stat-card"><div class="stat-num warn" id="statWarn">0</div><div class="stat-label">เฝ้าระวัง</div></div>
+      <div class="stat-card"><div class="stat-num danger" id="statDanger">0</div><div class="stat-label">อันตรายสูง</div></div>
+    </div>
+
+    <div class="section-label"><span class="zn">•</span>คำเตือนภัยล่าสุด</div>
+    <div class="recent-list" id="dashRecentList">
+      <div class="empty-state">ยังไม่มีประวัติการตรวจจับ — ไปที่ "ตรวจจับเสียง" เพื่อเริ่มวิเคราะห์ไฟล์แรก</div>
+    </div>
+  </section>
+
+  <!-- ============ SCANNER ============ -->
+  <section class="page active" id="page-scanner">
+    <h1 class="page-title">ตรวจจับเสียงคอลเซนเตอร์มิจฉาชีพ</h1>
+    <p class="page-sub">อัปโหลดไฟล์เสียง/วิดีโอ หรืออัดเสียงสด ระบบจะวิเคราะห์ลักษณะน้ำเสียงและคำต้องสงสัย แล้วสรุปดัชนีความเสี่ยงให้ทันที</p>
+
+    <div class="zone">
+      <div class="section-label"><span class="zn">1</span>เลือกรูปแบบการนำเข้าเสียง</div>
+      <div class="mode-tabs">
+        <button class="mode-tab active" id="inputTabUpload" type="button">
+          <span class="mode-tab-title">📁 อัปโหลดไฟล์</span>
+          <span class="mode-tab-sub">MP3, WAV, M4A, MP4, MOV</span>
+        </button>
+        <button class="mode-tab" id="inputTabMic" type="button">
+          <span class="mode-tab-title">🎙️ อัดเสียงสด</span>
+          <span class="mode-tab-sub">บันทึกจากไมโครโฟนทันที</span>
+        </button>
+      </div>
+      <div class="analysis-mode-row">
+        <button class="mode-tab active" id="modeQuickBtn" data-mode="quick" type="button">
+          <span class="mode-tab-title">โหมดเร็ว</span>
+          <span class="mode-tab-sub">สรุปคะแนน + จุดเด่น</span>
+        </button>
+        <button class="mode-tab" id="modeDetailBtn" data-mode="detailed" type="button">
+          <span class="mode-tab-title">โหมดละเอียด</span>
+          <span class="mode-tab-sub">ครบทุกสัญญาณ + ถอดข้อความ</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="zone">
+      <div class="section-label"><span class="zn">2</span>นำเข้าเสียง / วิดีโอ</div>
+
+      <div class="upload-panel" id="uploadPanel">
+        <label class="dropzone" id="dropzone">
+          <input type="file" id="fileInput" accept="audio/*,video/*">
+          <div class="mic-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a4 4 0 0 0-4 4v6a4 4 0 0 0 8 0V5a4 4 0 0 0-4-4z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/></svg>
+          </div>
+          <div class="dz-title">ลากไฟล์เสียง/วิดีโอมาวางที่นี่ หรือคลิกเพื่อเลือกไฟล์</div>
+          <div class="dz-sub">รองรับ <b>MP3, WAV, M4A, MP4, MOV</b> · ไม่เกิน 100MB</div>
+        </label>
+      </div>
+
+      <div class="record-panel" id="recordPanel">
+        <div class="record-box" id="recordBox">
+          <div class="record-left">
+            <button class="record-btn" id="recordBtn" type="button">
+              <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/></svg>
+            </button>
+            <div>
+              <div class="record-title" id="recordTitle">อัดเสียงจากไมโครโฟน</div>
+              <div class="record-sub" id="recordSub">กดปุ่มเพื่อเริ่มอัด แล้วกดอีกครั้งเพื่อหยุด</div>
+            </div>
+          </div>
+          <div class="record-time" id="recordTime">00:00</div>
+        </div>
+      </div>
+
+      <div class="card" id="fileCard">
+        <div class="file-row">
+          <div class="file-meta">
+            <span class="badge" id="fileBadge">AUDIO</span>
+            <span class="name" id="fileName">—</span>
+          </div>
+          <button class="remove-btn" id="removeBtn">เปลี่ยนไฟล์</button>
+        </div>
+        <audio id="playerAudio" controls></audio>
+        <video id="playerVideo" controls playsinline style="display:none;"></video>
+        <button class="analyze-btn" id="analyzeBtn">🔍 เริ่มวิเคราะห์ด้วย AI</button>
+        <div class="analyzing" id="analyzing">
+          <div class="bars"><i></i><i></i><i></i><i></i><i></i></div>
+          <span id="analyzingText">กำลังประมวลผลเสียง…</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="zone">
+      <div class="result" id="result">
+        <div class="section-label" style="margin-bottom:14px;"><span class="zn">3</span>ผลการวิเคราะห์ความเสี่ยง</div>
+        <div class="gauge-card" id="resultInner"></div>
+      </div>
+    </div>
+
+    <div class="note">
+      <b>หมายเหตุ:</b> คะแนนความเสี่ยงคำนวณจาก<b>ลักษณะคลื่นเสียงจริง</b>ในไฟล์ (ความดัง ความผันผวนของโทนเสียง สัดส่วนช่วงเงียบ จังหวะการพูด) ผ่าน Web Audio API — ส่วนการถอดข้อความและไฮไลต์คำต้องสงสัยทำงานได้จริง<b>เฉพาะการอัดเสียงสดจากไมค์</b>เท่านั้น (ผ่าน Web Speech API) ไฟล์ที่อัปโหลดยังไม่สามารถถอดข้อความได้บนหน้านี้ ต้องเชื่อมต่อ speech-to-text API ฝั่ง backend (เช่น Whisper) จึงจะทำได้ครบทุกไฟล์
+    </div>
+  </section>
+
+  <!-- ============ HISTORY ============ -->
+  <section class="page" id="page-history">
+    <h1 class="page-title">ประวัติการตรวจจับ</h1>
+    <p class="page-sub">รายการที่เคยวิเคราะห์บนเครื่องนี้ (บันทึกไว้ในเบราว์เซอร์ ไม่ได้ส่งขึ้นเซิร์ฟเวอร์)</p>
+
+    <div class="filter-row">
+      <select id="filterTier">
+        <option value="all">ทุกระดับความเสี่ยง</option>
+        <option value="safe">ปลอดภัย</option>
+        <option value="warn">เฝ้าระวัง</option>
+        <option value="danger">อันตรายสูง</option>
+      </select>
+      <select id="filterSort">
+        <option value="desc">ใหม่ล่าสุดก่อน</option>
+        <option value="asc">เก่าสุดก่อน</option>
+      </select>
+    </div>
+    <button class="hist-clear" id="clearHistoryBtn">ล้างประวัติทั้งหมด</button>
+
+    <div style="overflow-x:auto;">
+      <table class="history-table" id="historyTable">
+        <thead>
+          <tr><th>วันที่</th><th>ชื่อไฟล์</th><th>โหมด</th><th>คะแนน</th><th>ระดับ</th></tr>
+        </thead>
+        <tbody id="historyBody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ============ KEYWORDS ============ -->
+  <section class="page" id="page-keywords">
+    <h1 class="page-title">คลังคำเสี่ยง &amp; แพทเทิร์น</h1>
+    <p class="page-sub">รายการคำและรูปแบบประโยคที่ระบบใช้ตรวจจับเมื่อมีข้อความจากการถอดเสียง (ใช้งานได้เต็มที่กับการอัดเสียงสดตอนนี้)</p>
+    <div class="kw-grid" id="kwGrid"></div>
+  </section>
+
+  <!-- ============ REPORT ============ -->
+  <section class="page" id="page-report">
+    <h1 class="page-title">แจ้งเบาะแสคอลเซนเตอร์</h1>
+    <p class="page-sub">หากพบสายที่เข้าข่ายหลอกลวง แจ้งเจ้าหน้าที่โดยตรงได้ทันที — ระบบต้นแบบนี้ยังไม่ได้เชื่อมต่อการส่งข้อมูลไปยังหน่วยงานจริง ข้อมูลด้านล่างเป็นแบบร่างให้ดาวน์โหลดเก็บไว้ก่อนโทรแจ้ง</p>
+
+    <div class="report-hotline">
+      <div>
+        <div style="font-size:12px; color:var(--muted); margin-bottom:4px;">สายด่วนศูนย์ AOC 1441</div>
+        <div class="hotline-num">1441</div>
+      </div>
+      <a class="hotline-call" href="tel:1441">📞 โทรแจ้งเบาะแสตอนนี้</a>
+    </div>
+
+    <form class="report-form" id="reportForm">
+      <div class="field">
+        <label>ชื่อผู้แจ้ง (ไม่บังคับ)</label>
+        <input type="text" id="rf_name" placeholder="ไม่ระบุก็ได้">
+      </div>
+      <div class="field">
+        <label>เบอร์โทรที่ได้รับสาย</label>
+        <input type="text" id="rf_phone" placeholder="เช่น 02-xxx-xxxx">
+      </div>
+      <div class="field">
+        <label>รายละเอียดเหตุการณ์</label>
+        <textarea id="rf_detail" placeholder="อธิบายสิ่งที่เกิดขึ้น เช่น ผู้โทรอ้างเป็นเจ้าหน้าที่..."></textarea>
+      </div>
+      <button type="submit" class="submit-btn">📥 บันทึกเป็นไฟล์แบบร่าง (.txt)</button>
+    </form>
+  </section>
+
+  <!-- ============ SETTINGS ============ -->
+  <section class="page" id="page-settings">
+    <h1 class="page-title">ตั้งค่าระบบ</h1>
+    <p class="page-sub">ปรับแต่งค่าที่ใช้ได้จริงในหน้านี้ ส่วนที่ต้องพึ่ง backend จะระบุไว้ว่ายังไม่เชื่อมต่อจริง</p>
+
+    <div class="settings-block">
+      <h3>ความไวในการตรวจจับ (Threshold)</h3>
+      <div class="hint">ปรับเกณฑ์แบ่งระดับ "เฝ้าระวัง" และ "อันตรายสูง" ของคะแนนความเสี่ยง — ยิ่งเลื่อนไปทาง "ไวขึ้น" ยิ่งฟันธงว่าเสี่ยงง่ายขึ้น</div>
+      <div class="slider-row">
+        <span style="font-size:12px; color:var(--muted);">ไวน้อย</span>
+        <input type="range" id="sensitivitySlider" min="-20" max="20" value="0" step="5">
+        <span style="font-size:12px; color:var(--muted);">ไวมาก</span>
+        <span class="slider-val" id="sensitivityVal">0</span>
+      </div>
+    </div>
+
+    <div class="settings-block">
+      <h3>ภาษา (Language)</h3>
+      <div class="hint">สลับภาษาหลักของเมนูและหัวข้อสำคัญ (คำอธิบายละเอียดยังเป็นภาษาไทยเท่านั้นในต้นแบบนี้)</div>
+      <div class="lang-toggle" style="width:fit-content;">
+        <button data-lang="th" class="active settings-lang">TH ภาษาไทย</button>
+        <button data-lang="en" class="settings-lang">EN English</button>
+      </div>
+    </div>
+
+    <div class="settings-block">
+      <h3>การเชื่อมต่อ API / แจ้งเตือน</h3>
+      <div class="hint">ฟิลด์เหล่านี้เป็นต้นแบบ UI เท่านั้น — ยังไม่เชื่อมต่อ backend จริง</div>
+      <div class="field" style="margin-bottom:12px;">
+        <label>Speech-to-Text / LLM API Key</label>
+        <input type="text" placeholder="ยังไม่เชื่อมต่อจริงในต้นแบบนี้" disabled>
+      </div>
+      <div class="toggle-row"><span>แจ้งเตือนผ่าน Line OA</span><div class="switch" data-toggle></div></div>
+      <div class="toggle-row"><span>แจ้งเตือนผ่าน SMS</span><div class="switch" data-toggle></div></div>
+      <div class="disabled-note">การแจ้งเตือนต้องเชื่อมต่อบริการภายนอกฝั่ง backend จึงจะทำงานได้จริง</div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="pagefoot">
+  <span>ThaiGuard Call-Detector</span>
+  <span>build · deploy · demo</span>
+</footer>
 
 <script>
+  /* ================= Navigation ================= */
+  const pages = document.querySelectorAll('.page');
+  const navlinks = document.querySelectorAll('.navlink, [data-page].dropdown-item');
+  function goPage(name){
+    pages.forEach(p => p.classList.toggle('active', p.id === 'page-' + name));
+    document.querySelectorAll('.navlink').forEach(b => b.classList.toggle('active', b.dataset.page === name));
+    if(name === 'dashboard') renderDashboard();
+    if(name === 'history') renderHistory();
+    window.scrollTo({ top:0, behavior:'smooth' });
+    closeDropdowns();
+  }
+  document.querySelectorAll('[data-page]').forEach(el => {
+    el.addEventListener('click', () => goPage(el.dataset.page));
+  });
+
+  /* ================= Utility dropdowns ================= */
+  const notifBtn = document.getElementById('notifBtn');
+  const notifDropdown = document.getElementById('notifDropdown');
+  const profileBtn = document.getElementById('profileBtn');
+  const profileDropdown = document.getElementById('profileDropdown');
+  function closeDropdowns(){ notifDropdown.classList.remove('show'); profileDropdown.classList.remove('show'); }
+  notifBtn.addEventListener('click', (e) => { e.stopPropagation(); profileDropdown.classList.remove('show'); notifDropdown.classList.toggle('show'); });
+  profileBtn.addEventListener('click', (e) => { e.stopPropagation(); notifDropdown.classList.remove('show'); profileDropdown.classList.toggle('show'); });
+  document.addEventListener('click', closeDropdowns);
+  document.getElementById('logoutItem').addEventListener('click', () => alert('ต้นแบบนี้ยังไม่มีระบบบัญชีผู้ใช้จริง (Demo only)'));
+
+  /* ================= i18n (lightweight) ================= */
+  const i18n = {
+    th: { dash_title:'ภาพรวมระบบ', dash_sub:'สรุปสถิติการตรวจจับเสียงคอลเซนเตอร์และคำเตือนภัยล่าสุดจากประวัติการใช้งานบนเครื่องนี้', nav_dashboard:'แดชบอร์ด', nav_scanner:'ตรวจจับเสียง', nav_history:'ประวัติ', nav_keywords:'คลังคำเสี่ยง', nav_report:'แจ้งเบาะแส' },
+    en: { dash_title:'System Overview', dash_sub:'Summary stats of call-center scam detections and recent alerts saved on this device.', nav_dashboard:'Dashboard', nav_scanner:'Audio Scanner', nav_history:'History', nav_keywords:'Risk Keywords', nav_report:'Report Scam' }
+  };
+  function applyLang(lang){
+    document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = i18n[lang][el.dataset.i18n] || el.textContent; });
+    const navMap = { dashboard:'nav_dashboard', scanner:'nav_scanner', history:'nav_history', keywords:'nav_keywords', report:'nav_report' };
+    document.querySelectorAll('.navlink').forEach(b => { const k = navMap[b.dataset.page]; if(k) b.textContent = i18n[lang][k]; });
+    document.querySelectorAll('.lang-toggle button').forEach(b => b.classList.toggle('active', b.dataset.lang === lang));
+    localStorage.setItem('tg_lang', lang);
+  }
+  document.querySelectorAll('.lang-toggle button').forEach(b => b.addEventListener('click', () => applyLang(b.dataset.lang)));
+  applyLang(localStorage.getItem('tg_lang') || 'th');
+
+  /* ================= Input mode tabs (upload / mic) ================= */
+  const inputTabUpload = document.getElementById('inputTabUpload');
+  const inputTabMic = document.getElementById('inputTabMic');
+  const uploadPanel = document.getElementById('uploadPanel');
+  const recordPanel = document.getElementById('recordPanel');
+  inputTabUpload.addEventListener('click', () => {
+    inputTabUpload.classList.add('active'); inputTabMic.classList.remove('active');
+    uploadPanel.classList.remove('hide'); recordPanel.classList.remove('show');
+  });
+  inputTabMic.addEventListener('click', () => {
+    inputTabMic.classList.add('active'); inputTabUpload.classList.remove('active');
+    uploadPanel.classList.add('hide'); recordPanel.classList.add('show');
+  });
+
+  /* ================= Analysis mode (quick / detailed) ================= */
+  let analysisMode = 'quick';
+  const modeQuickBtn = document.getElementById('modeQuickBtn');
+  const modeDetailBtn = document.getElementById('modeDetailBtn');
+  [modeQuickBtn, modeDetailBtn].forEach(btn => {
+    btn.addEventListener('click', () => {
+      analysisMode = btn.dataset.mode;
+      modeQuickBtn.classList.toggle('active', analysisMode === 'quick');
+      modeDetailBtn.classList.toggle('active', analysisMode === 'detailed');
+      if(result.classList.contains('show') && currentFile) analyzeBtn.click();
+    });
+  });
+
+  /* ================= File / recording state ================= */
   const dropzone = document.getElementById('dropzone');
   const fileInput = document.getElementById('fileInput');
   const fileCard = document.getElementById('fileCard');
@@ -418,108 +679,54 @@
   const analyzing = document.getElementById('analyzing');
   const analyzingText = document.getElementById('analyzingText');
   const result = document.getElementById('result');
-  const idleWave = document.getElementById('idleWave');
-
-  // decorative idle waveform bars
-  for(let i=0;i<28;i++){
-    const bar = document.createElement('i');
-    bar.style.height = (6 + Math.random()*22) + 'px';
-    bar.style.animationDelay = (Math.random()*1.8).toFixed(2) + 's';
-    idleWave.appendChild(bar);
-  }
+  const resultInner = document.getElementById('resultInner');
 
   let currentFile = null;
-  let currentTranscript = null;   // captured only for live mic recordings
-  let currentSource = null;       // 'upload' | 'mic'
+  let currentTranscript = null;
+  let currentSource = null; // 'upload' | 'mic'
 
-  ['dragenter','dragover'].forEach(ev =>
-    dropzone.addEventListener(ev, e => { e.preventDefault(); dropzone.classList.add('drag'); })
-  );
-  ['dragleave','drop'].forEach(ev =>
-    dropzone.addEventListener(ev, e => { e.preventDefault(); dropzone.classList.remove('drag'); })
-  );
-  dropzone.addEventListener('drop', e => {
-    const f = e.dataTransfer.files[0];
-    if(f) handleFile(f);
-  });
-  fileInput.addEventListener('change', e => {
-    const f = e.target.files[0];
-    if(f) handleFile(f);
-  });
+  ['dragenter','dragover'].forEach(ev => dropzone.addEventListener(ev, e => { e.preventDefault(); dropzone.classList.add('drag'); }));
+  ['dragleave','drop'].forEach(ev => dropzone.addEventListener(ev, e => { e.preventDefault(); dropzone.classList.remove('drag'); }));
+  dropzone.addEventListener('drop', e => { const f = e.dataTransfer.files[0]; if(f) handleFile(f); });
+  fileInput.addEventListener('change', e => { const f = e.target.files[0]; if(f) handleFile(f); });
 
   function handleFile(file, sourceLabel){
     const isAudio = file.type.startsWith('audio/');
     const isVideo = file.type.startsWith('video/');
-    if(!isAudio && !isVideo){
-      alert('กรุณาเลือกไฟล์เสียงหรือวิดีโอ (MP3, WAV, M4A, MP4, MOV)');
-      return;
-    }
+    if(!isAudio && !isVideo){ alert('กรุณาเลือกไฟล์เสียงหรือวิดีโอ (MP3, WAV, M4A, MP4, MOV)'); return; }
     currentFile = file;
     currentSource = sourceLabel === 'MIC' ? 'mic' : 'upload';
-    if(currentSource === 'upload') currentTranscript = null; // no client-side STT for uploaded files
+    if(currentSource === 'upload') currentTranscript = null;
     fileName.textContent = file.name;
     fileBadge.textContent = sourceLabel || (isVideo ? 'VIDEO' : 'AUDIO');
     const url = URL.createObjectURL(file);
-    if(isVideo){
-      playerVideo.src = url; playerVideo.style.display = 'block';
-      playerAudio.removeAttribute('src'); playerAudio.style.display = 'none';
-    } else {
-      playerAudio.src = url; playerAudio.style.display = 'block';
-      playerVideo.removeAttribute('src'); playerVideo.style.display = 'none';
-    }
+    if(isVideo){ playerVideo.src = url; playerVideo.style.display='block'; playerAudio.removeAttribute('src'); playerAudio.style.display='none'; }
+    else { playerAudio.src = url; playerAudio.style.display='block'; playerVideo.removeAttribute('src'); playerVideo.style.display='none'; }
     fileCard.classList.add('show');
-    result.classList.remove('show');
-    result.innerHTML = '';
+    result.classList.remove('show'); resultInner.innerHTML = '';
     fileCard.scrollIntoView({ behavior:'smooth', block:'nearest' });
   }
 
   removeBtn.addEventListener('click', () => {
-    currentFile = null;
-    currentTranscript = null;
-    currentSource = null;
-    fileInput.value = '';
-    fileCard.classList.remove('show');
-    result.classList.remove('show');
-    result.innerHTML = '';
+    currentFile = null; currentTranscript = null; currentSource = null;
+    fileInput.value = ''; fileCard.classList.remove('show');
+    result.classList.remove('show'); resultInner.innerHTML = '';
   });
 
-  /* ---------- Microphone recording ---------- */
-  let mediaRecorder = null;
-  let recordedChunks = [];
-  let recordStream = null;
-  let recordTimer = null;
-  let recordSeconds = 0;
-  let isRecording = false;
-
-  function formatTime(s){
-    const m = Math.floor(s/60).toString().padStart(2,'0');
-    const sec = (s%60).toString().padStart(2,'0');
-    return `${m}:${sec}`;
-  }
+  /* ================= Mic recording + live STT ================= */
+  let mediaRecorder=null, recordedChunks=[], recordStream=null, recordTimer=null, recordSeconds=0, isRecording=false;
+  function formatTime(s){ const m=Math.floor(s/60).toString().padStart(2,'0'); const sec=(s%60).toString().padStart(2,'0'); return `${m}:${sec}`; }
 
   recordBtn.addEventListener('click', async () => {
     if(!isRecording){
-      if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
-        alert('เบราว์เซอร์นี้ไม่รองรับการอัดเสียงจากไมโครโฟน');
-        return;
-      }
-      try{
-        recordStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      }catch(err){
-        alert('ไม่สามารถเข้าถึงไมโครโฟนได้ กรุณาอนุญาตสิทธิ์การใช้ไมค์');
-        return;
-      }
+      if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){ alert('เบราว์เซอร์นี้ไม่รองรับการอัดเสียงจากไมโครโฟน'); return; }
+      try{ recordStream = await navigator.mediaDevices.getUserMedia({ audio:true }); }
+      catch(err){ alert('ไม่สามารถเข้าถึงไมโครโฟนได้ กรุณาอนุญาตสิทธิ์การใช้ไมค์'); return; }
       recordedChunks = [];
-      const mimeCandidates = [
-        'audio/mp4',
-        'audio/mp4;codecs=mp4a.40.2',
-        'audio/webm;codecs=opus',
-        'audio/webm',
-        'audio/ogg;codecs=opus'
-      ];
+      const mimeCandidates = ['audio/mp4','audio/mp4;codecs=mp4a.40.2','audio/webm;codecs=opus','audio/webm','audio/ogg;codecs=opus'];
       const chosenMime = mimeCandidates.find(m => window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(m));
-      mediaRecorder = chosenMime ? new MediaRecorder(recordStream, { mimeType: chosenMime }) : new MediaRecorder(recordStream);
-      mediaRecorder.ondataavailable = e => { if(e.data.size > 0) recordedChunks.push(e.data); };
+      mediaRecorder = chosenMime ? new MediaRecorder(recordStream,{mimeType:chosenMime}) : new MediaRecorder(recordStream);
+      mediaRecorder.ondataavailable = e => { if(e.data.size>0) recordedChunks.push(e.data); };
       mediaRecorder.onstop = () => {
         const outType = (mediaRecorder.mimeType || chosenMime || 'audio/webm');
         const ext = outType.includes('mp4') ? 'm4a' : outType.includes('ogg') ? 'ogg' : 'webm';
@@ -528,243 +735,363 @@
         handleFile(file, 'MIC');
         recordStream.getTracks().forEach(t => t.stop());
       };
-      mediaRecorder.start();
-      startLiveTranscript();
-      isRecording = true;
-      recordSeconds = 0;
-      recordTime.textContent = formatTime(0);
-      recordBox.classList.add('live');
-      recordTitle.textContent = 'กำลังอัดเสียง…';
-      recordSub.textContent = 'กดปุ่มอีกครั้งเพื่อหยุดและวิเคราะห์';
-      recordTimer = setInterval(() => {
-        recordSeconds++;
-        recordTime.textContent = formatTime(recordSeconds);
-      }, 1000);
+      mediaRecorder.start(); startLiveTranscript();
+      isRecording = true; recordSeconds = 0; recordTime.textContent = formatTime(0);
+      recordBox.classList.add('live'); recordTitle.textContent = 'กำลังอัดเสียง…'; recordSub.textContent = 'กดปุ่มอีกครั้งเพื่อหยุดและวิเคราะห์';
+      recordTimer = setInterval(() => { recordSeconds++; recordTime.textContent = formatTime(recordSeconds); }, 1000);
     } else {
-      isRecording = false;
-      clearInterval(recordTimer);
-      recordBox.classList.remove('live');
-      recordTitle.textContent = 'อัดเสียงจากไมโครโฟน';
-      recordSub.textContent = 'กดปุ่มเพื่อเริ่มอัด แล้วกดอีกครั้งเพื่อหยุด';
-      recordTime.textContent = '00:00';
+      isRecording = false; clearInterval(recordTimer);
+      recordBox.classList.remove('live'); recordTitle.textContent = 'อัดเสียงจากไมโครโฟน'; recordSub.textContent = 'กดปุ่มเพื่อเริ่มอัด แล้วกดอีกครั้งเพื่อหยุด'; recordTime.textContent = '00:00';
       stopLiveTranscript();
       if(mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
     }
   });
 
-  /* ---------- Live speech-to-text (mic recording only) ---------- */
-  // Uses the browser's built-in SpeechRecognition. Only works for LIVE
-  // microphone input — browsers have no API to transcribe an arbitrary
-  // uploaded audio file, so uploads never get an auto transcript here.
-  let speechRecognizer = null;
-  let liveTranscriptFinal = '';
-
+  let speechRecognizer=null, liveTranscriptFinal='';
   function startLiveTranscript(){
-    liveTranscriptFinal = '';
-    currentTranscript = null;
+    liveTranscriptFinal=''; currentTranscript=null;
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if(!SR) return; // not supported in this browser — handled at render time
+    if(!SR) return;
     speechRecognizer = new SR();
-    speechRecognizer.lang = 'th-TH';
-    speechRecognizer.continuous = true;
-    speechRecognizer.interimResults = true;
+    speechRecognizer.lang='th-TH'; speechRecognizer.continuous=true; speechRecognizer.interimResults=true;
     speechRecognizer.onresult = (e) => {
-      let interim = '';
-      for(let i = e.resultIndex; i < e.results.length; i++){
+      let interim='';
+      for(let i=e.resultIndex; i<e.results.length; i++){
         const chunk = e.results[i][0].transcript;
-        if(e.results[i].isFinal) liveTranscriptFinal += chunk + ' ';
-        else interim += chunk;
+        if(e.results[i].isFinal) liveTranscriptFinal += chunk + ' '; else interim += chunk;
       }
       currentTranscript = (liveTranscriptFinal + interim).trim();
     };
     speechRecognizer.onerror = () => {};
     try{ speechRecognizer.start(); }catch(e){}
   }
-
   function stopLiveTranscript(){
-    if(speechRecognizer){
-      try{ speechRecognizer.stop(); }catch(e){}
-    }
+    if(speechRecognizer){ try{ speechRecognizer.stop(); }catch(e){} }
     currentTranscript = liveTranscriptFinal.trim() || currentTranscript;
   }
 
+  /* ================= Risk keyword library ================= */
+  const RISK_KEYWORDS = [
+    { word:'โอนเงิน', context:'ขอให้โอนเงิน / ตรวจสอบเงินในบัญชี' },
+    { word:'อายัดบัญชี', context:'ข่มขู่เรื่องบัญชีถูกอายัด' },
+    { word:'ฟอกเงิน', context:'กล่าวหาว่าเกี่ยวข้องกับคดีฟอกเงิน' },
+    { word:'ควบคุมตัว', context:'ข่มขู่เรื่องการจับกุม/ควบคุมตัว' },
+    { word:'สถานีตำรวจ', context:'อ้างเป็นเจ้าหน้าที่ตำรวจ/สถานีตำรวจ' },
+    { word:'เจ้าหน้าที่ตำรวจ', context:'ปลอมตัวเป็นเจ้าหน้าที่รัฐ' },
+    { word:'คดีอาญา', context:'ข่มขู่ว่าพัวพันคดีอาญา' },
+    { word:'พัสดุผิดกฎหมาย', context:'มุกพัสดุผิดกฎหมาย/ยาเสพติด' },
+    { word:'ยึดทรัพย์', context:'ข่มขู่เรื่องการยึดทรัพย์สิน' },
+    { word:'บัญชีม้า', context:'กล่าวหาเกี่ยวข้องกับบัญชีม้า' },
+    { word:'ปปง', context:'อ้างหน่วยงาน ปปง.' },
+    { word:'ธนาคารแห่งประเทศไทย', context:'ปลอมอ้างธนาคารแห่งประเทศไทย' },
+    { word:'ตรวจสอบเงิน', context:'ขอให้ทำการ "ตรวจสอบ" เงินในบัญชี (มุกหลอกโอน)' },
+    { word:'แอปดูดเงิน', context:'หลอกให้ติดตั้งแอปควบคุมเครื่อง' },
+    { word:'รหัส OTP', context:'ขอรหัส OTP / ข้อมูลยืนยันตัวตน' }
+  ];
+
+  function highlightTranscript(text){
+    let safe = text.replace(/</g,'&lt;');
+    RISK_KEYWORDS.forEach(k => {
+      const re = new RegExp(k.word.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'), 'g');
+      safe = safe.replace(re, m => `<mark>${m}</mark>`);
+    });
+    return safe;
+  }
+  function detectKeywords(text){
+    if(!text) return [];
+    return RISK_KEYWORDS.filter(k => text.includes(k.word));
+  }
+
+  /* ================= Acoustic analysis (Web Audio API) ================= */
   analyzeBtn.addEventListener('click', async () => {
     if(!currentFile) return;
-    analyzeBtn.disabled = true;
-    analyzing.classList.add('show');
-    result.classList.remove('show');
-
-    const steps = ['กำลังอ่านคลื่นเสียง…','กำลังวัดความดัง/ความผันผวนของโทนเสียง…','กำลังประเมินความเสี่ยง…'];
-    let i = 0;
-    const stepTimer = setInterval(() => {
-      analyzingText.textContent = steps[i % steps.length];
-      i++;
-    }, 700);
-
+    analyzeBtn.disabled = true; analyzing.classList.add('show'); result.classList.remove('show');
+    const steps = analysisMode === 'quick'
+      ? ['กำลังประเมินคะแนนความเสี่ยง…']
+      : ['กำลังอ่านคลื่นเสียง…','กำลังวัดความดัง/ความผันผวนของโทนเสียง…','กำลังประเมินความเสี่ยง…','กำลังตรวจคำต้องสงสัย…'];
+    let i=0;
+    const stepTimer = setInterval(() => { analyzingText.textContent = steps[i % steps.length]; i++; }, 700);
     try{
       const analysis = await analyzeAudioFeatures(currentFile);
-      clearInterval(stepTimer);
-      analyzing.classList.remove('show');
-      analyzeBtn.disabled = false;
+      clearInterval(stepTimer); analyzing.classList.remove('show'); analyzeBtn.disabled = false;
       renderResult(analysis);
     }catch(err){
-      clearInterval(stepTimer);
-      analyzing.classList.remove('show');
-      analyzeBtn.disabled = false;
+      clearInterval(stepTimer); analyzing.classList.remove('show'); analyzeBtn.disabled = false;
       renderResult(fallbackAnalyze(currentFile));
     }
   });
 
-  // ---------- Real acoustic feature analysis (Web Audio API) ----------
-  // This decodes the actual audio track and scores risk from measurable
-  // signal properties (loudness, tone-energy swings, silence ratio, pace).
-  // It is NOT speech/keyword detection — that requires a speech-to-text +
-  // LLM backend. This gives a consistent, content-derived heuristic instead
-  // of the old random/filename-based mock.
   async function analyzeAudioFeatures(file){
     const arrayBuffer = await file.arrayBuffer();
     const AudioCtx = window.AudioContext || window.webkitAudioContext;
     const ctx = new AudioCtx();
     let buffer;
-    try{
-      buffer = await ctx.decodeAudioData(arrayBuffer.slice(0));
-    } finally {
-      if(ctx.close) ctx.close();
-    }
-
+    try{ buffer = await ctx.decodeAudioData(arrayBuffer.slice(0)); } finally { if(ctx.close) ctx.close(); }
     const data = buffer.getChannelData(0);
     const sr = buffer.sampleRate;
-    const duration = buffer.duration;
-
-    // --- Loudness (RMS) ---
-    let sumSquares = 0;
-    for(let n=0; n<data.length; n++) sumSquares += data[n]*data[n];
-    const rms = Math.sqrt(sumSquares / data.length);
-
-    // --- Windowed energy (for variance / "tone swings") ---
-    const winSec = 0.5;
-    const winSize = Math.max(1, Math.floor(sr * winSec));
-    const windowRms = [];
+    let sumSquares=0; for(let n=0;n<data.length;n++) sumSquares += data[n]*data[n];
+    const rms = Math.sqrt(sumSquares/data.length);
+    const winSize = Math.max(1, Math.floor(sr*0.5));
+    const windowRms=[];
     for(let start=0; start<data.length; start+=winSize){
-      const end = Math.min(start+winSize, data.length);
-      let s = 0;
-      for(let n=start; n<end; n++) s += data[n]*data[n];
+      const end=Math.min(start+winSize,data.length); let s=0;
+      for(let n=start;n<end;n++) s+=data[n]*data[n];
       windowRms.push(Math.sqrt(s/(end-start)));
     }
-    const meanWinRms = windowRms.reduce((a,b)=>a+b,0) / windowRms.length;
-    const variance = windowRms.reduce((a,b)=>a + Math.pow(b-meanWinRms,2), 0) / windowRms.length;
-    const energyVariance = Math.sqrt(variance); // std dev of loudness across time
-
-    // --- Silence ratio ---
-    const silenceThresh = 0.015;
-    let silentSamples = 0;
-    for(let n=0; n<data.length; n++) if(Math.abs(data[n]) < silenceThresh) silentSamples++;
-    const silenceRatio = silentSamples / data.length;
-
-    // --- Zero-crossing rate (proxy for pace / sibilance) ---
-    let crossings = 0;
-    for(let n=1; n<data.length; n++){
-      if((data[n-1] >= 0) !== (data[n] >= 0)) crossings++;
-    }
-    const zcr = crossings / data.length;
-
-    return scoreFromFeatures({ rms, energyVariance, silenceRatio, zcr, duration });
+    const meanWinRms = windowRms.reduce((a,b)=>a+b,0)/windowRms.length;
+    const variance = windowRms.reduce((a,b)=>a+Math.pow(b-meanWinRms,2),0)/windowRms.length;
+    const energyVariance = Math.sqrt(variance);
+    const silenceThresh=0.015; let silentSamples=0;
+    for(let n=0;n<data.length;n++) if(Math.abs(data[n])<silenceThresh) silentSamples++;
+    const silenceRatio = silentSamples/data.length;
+    let crossings=0; for(let n=1;n<data.length;n++) if((data[n-1]>=0)!==(data[n]>=0)) crossings++;
+    const zcr = crossings/data.length;
+    return scoreFromFeatures({ rms, energyVariance, silenceRatio, zcr });
   }
 
-  // Fallback when the browser/file can't be decoded by Web Audio API
-  // (e.g. some video containers). Uses only file size + duration if the
-  // media element managed to load metadata.
   function fallbackAnalyze(file){
     const seconds = (playerAudio.style.display !== 'none' ? playerAudio.duration : playerVideo.duration) || 0;
-    const kbPerSec = seconds > 0 ? (file.size/1024) / seconds : 0;
-    // Low bitrate + very short/very long calls skew slightly higher risk,
-    // purely as a rough stand-in since acoustic features aren't available.
+    const kbPerSec = seconds > 0 ? (file.size/1024)/seconds : 0;
     let score = 30;
-    if(kbPerSec > 0 && kbPerSec < 8) score += 15;
-    if(seconds > 0 && seconds < 8) score += 10;
-    score = Math.min(92, Math.max(5, score));
-    const risky = score > 50;
+    if(kbPerSec>0 && kbPerSec<8) score += 15;
+    if(seconds>0 && seconds<8) score += 10;
+    score = applySensitivity(Math.min(92, Math.max(5, score)));
     return {
-      risky, score,
+      score, tier: tierFromScore(score),
       signals: [
-        { k: 'วิเคราะห์คลื่นเสียงโดยตรง', v: 'ไม่รองรับไฟล์นี้', flag: false },
-        { k: 'ความยาวไฟล์', v: seconds ? `${seconds.toFixed(1)} วินาที` : 'ไม่ทราบ', flag: false },
-        { k: 'อัตราบิต (ประมาณ)', v: kbPerSec ? `${kbPerSec.toFixed(1)} KB/s` : 'ไม่ทราบ', flag: kbPerSec>0 && kbPerSec<8 },
-        { k: 'หมายเหตุ', v: 'ใช้ค่าประมาณแทนคลื่นเสียงจริง', flag: false }
+        { k:'วิเคราะห์คลื่นเสียงโดยตรง', v:'ไม่รองรับไฟล์นี้', flag:false, primary:true },
+        { k:'ความยาวไฟล์', v: seconds ? `${seconds.toFixed(1)} วินาที` : 'ไม่ทราบ', flag:false, primary:true },
+        { k:'อัตราบิต (ประมาณ)', v: kbPerSec ? `${kbPerSec.toFixed(1)} KB/s` : 'ไม่ทราบ', flag: kbPerSec>0 && kbPerSec<8 },
+        { k:'หมายเหตุ', v:'ใช้ค่าประมาณแทนคลื่นเสียงจริง', flag:false }
       ]
     };
   }
 
-  function scoreFromFeatures({ rms, energyVariance, silenceRatio, zcr, duration }){
-    // Weighted heuristic — thresholds are illustrative, tuned to spread
-    // typical speech recordings across the range rather than clustering.
-    // Higher energy swings ("เร่งเร้า/กดดัน"), sparse silence (non-stop
-    // talking), and fast pace (high ZCR) push the score up.
-    const swingScore   = Math.min(1, energyVariance / 0.09);      // 0..1
-    const silenceScore = Math.min(1, Math.max(0, (0.25 - silenceRatio) / 0.25)); // less silence -> higher
-    const paceScore    = Math.min(1, Math.max(0, (zcr - 0.03) / 0.12));
-    const loudnessScore= Math.min(1, rms / 0.12);
+  function applySensitivity(score){
+    const offset = parseInt(localStorage.getItem('tg_sensitivity') || '0', 10);
+    return Math.min(99, Math.max(1, Math.round(score + offset)));
+  }
+  function tierFromScore(score){
+    if(score >= 70) return 'danger';
+    if(score >= 31) return 'warn';
+    return 'safe';
+  }
 
+  function scoreFromFeatures({ rms, energyVariance, silenceRatio, zcr }){
+    const swingScore = Math.min(1, energyVariance/0.09);
+    const silenceScore = Math.min(1, Math.max(0,(0.25-silenceRatio)/0.25));
+    const paceScore = Math.min(1, Math.max(0,(zcr-0.03)/0.12));
+    const loudnessScore = Math.min(1, rms/0.12);
     const weighted = swingScore*0.35 + silenceScore*0.25 + paceScore*0.25 + loudnessScore*0.15;
-    const score = Math.round(Math.min(96, Math.max(4, weighted*100)));
-    const risky = score > 50;
-
+    const score = applySensitivity(Math.round(Math.min(96, Math.max(4, weighted*100))));
     return {
-      risky, score,
+      score, tier: tierFromScore(score),
       signals: [
-        { k: 'ความผันผวนของโทนเสียง (พลังงานขึ้น-ลงเร็ว)', v: swingScore>0.55 ? 'สูง' : swingScore>0.3 ? 'ปานกลาง' : 'ต่ำ', flag: swingScore>0.55 },
-        { k: 'สัดส่วนช่วงเงียบในบทสนทนา', v: `${Math.round(silenceRatio*100)}%`, flag: silenceRatio < 0.08 },
-        { k: 'จังหวะการพูด (ความถี่การสลับสัญญาณ)', v: paceScore>0.55 ? 'เร็ว' : paceScore>0.3 ? 'ปานกลาง' : 'ปกติ', flag: paceScore>0.55 },
-        { k: 'ความดังเฉลี่ยของเสียง (RMS)', v: loudnessScore>0.6 ? 'ดังผิดปกติ' : 'ปกติ', flag: loudnessScore>0.6 }
+        { k:'ความผันผวนของโทนเสียง (พลังงานขึ้น-ลงเร็ว)', v: swingScore>0.55?'สูง':swingScore>0.3?'ปานกลาง':'ต่ำ', flag: swingScore>0.55, primary:true },
+        { k:'สัดส่วนช่วงเงียบในบทสนทนา', v:`${Math.round(silenceRatio*100)}%`, flag: silenceRatio<0.08, primary:true },
+        { k:'จังหวะการพูด (ความถี่การสลับสัญญาณ)', v: paceScore>0.55?'เร็ว':paceScore>0.3?'ปานกลาง':'ปกติ', flag: paceScore>0.55 },
+        { k:'ความดังเฉลี่ยของเสียง (RMS)', v: loudnessScore>0.6?'ดังผิดปกติ':'ปกติ', flag: loudnessScore>0.6 }
       ]
     };
   }
+
+  /* ================= Render result (zones 3 + 4) ================= */
+  const tierLabel = { safe:'ปลอดภัย', warn:'เฝ้าระวัง', danger:'อันตรายสูง - แก๊งคอลเซนเตอร์' };
+  const tierBadge = { safe:'ปลอดภัย', warn:'เฝ้าระวัง', danger:'อันตรายสูง' };
 
   function transcriptSectionHtml(){
     const hasSTT = !!(window.SpeechRecognition || window.webkitSpeechRecognition);
     let body;
-    if(currentSource === 'mic' && currentTranscript){
-      body = `<p class="transcript-text">${currentTranscript.replace(/</g,'&lt;')}</p>`;
-    } else if(currentSource === 'mic' && !hasSTT){
-      body = `<p class="transcript-empty">เบราว์เซอร์นี้ไม่รองรับการถอดข้อความสด (ลองใช้ Chrome)</p>`;
-    } else if(currentSource === 'mic'){
-      body = `<p class="transcript-empty">ไม่ได้ยินคำพูดชัดเจนพอที่จะถอดข้อความ</p>`;
-    } else {
-      body = `<p class="transcript-empty">ไฟล์ที่อัปโหลดยังไม่สามารถถอดข้อความได้บนหน้านี้ — เบราว์เซอร์ไม่มีความสามารถถอดเสียงจากไฟล์โดยตรง ต้องเชื่อมต่อ speech-to-text API ฝั่ง backend (เช่น Whisper) จึงจะแสดงบทสนทนาจากไฟล์อัปโหลดได้</p>`;
-    }
+    if(currentSource==='mic' && currentTranscript){ body = `<p class="transcript-text">${highlightTranscript(currentTranscript)}</p>`; }
+    else if(currentSource==='mic' && !hasSTT){ body = `<p class="transcript-empty">เบราว์เซอร์นี้ไม่รองรับการถอดข้อความสด (ลองใช้ Chrome)</p>`; }
+    else if(currentSource==='mic'){ body = `<p class="transcript-empty">ไม่ได้ยินคำพูดชัดเจนพอที่จะถอดข้อความ</p>`; }
+    else { body = `<p class="transcript-empty">ไฟล์ที่อัปโหลดยังไม่สามารถถอดข้อความได้บนหน้านี้ — ต้องเชื่อมต่อ speech-to-text API ฝั่ง backend (เช่น Whisper)</p>`; }
+    return `<div class="transcript-box"><div class="transcript-label">ข้อความจากการแปลงเสียง</div>${body}</div>`;
+  }
+
+  function insightSectionHtml(){
+    const found = currentSource==='mic' && currentTranscript ? detectKeywords(currentTranscript) : [];
+    const tagsHtml = found.length
+      ? found.map(k => `<span class="tag">${k.word}</span>`).join('')
+      : `<span class="tag none">${currentSource==='mic' ? 'ไม่พบคำต้องสงสัยในข้อความ' : 'ยังไม่มีข้อความให้ตรวจ (อัปโหลดไฟล์ไม่รองรับการถอดเสียง)'}</span>`;
+    const contextHtml = found.length
+      ? found.map(k => `<div>• <b>${k.word}</b> — ${k.context}</div>`).join('')
+      : `<div>ยังไม่พบรูปแบบที่ตรงกับมุกหลอกลวงที่รู้จัก</div>`;
     return `
-      <div class="transcript-box">
-        <div class="transcript-label">บทสนทนา (ถอดข้อความ)</div>
-        ${body}
+      <div class="insight-box">
+        <div class="insight-label">คำต้องสงสัยที่พบ</div>
+        <div class="tag-row">${tagsHtml}</div>
+        <div class="insight-label">บริบทความเสี่ยง</div>
+        <div class="context-line">${contextHtml}</div>
       </div>`;
   }
 
   function renderResult(r){
-    const cls = r.risky ? 'risk-high' : 'risk-low';
-    const title = r.risky ? 'เข้าข่ายคอลเซนเตอร์หลอกลวง' : 'ไม่พบสัญญาณผิดปกติ';
-    const label = r.risky ? 'ความเสี่ยงสูง' : 'ความเสี่ยงต่ำ';
+    const isQuick = analysisMode === 'quick';
+    const signalsToShow = isQuick ? r.signals.filter(s=>s.primary) : r.signals;
+    const tier = r.tier;
 
-    result.innerHTML = `
-      <div class="result-head ${cls}">
+    resultInner.innerHTML = `
+      <div class="gauge-head ${tier}">
         <div class="verdict-ring">${r.score}%</div>
         <div class="verdict-text">
-          <div class="label">${label}</div>
-          <div class="title">${title}</div>
+          <div class="label">ระดับความเสี่ยง${isQuick ? ' · โหมดเร็ว' : ''}</div>
+          <div class="title">${tierLabel[tier]}</div>
         </div>
       </div>
+      <div class="gauge-bar"><div class="gauge-fill ${tier}" style="width:${r.score}%"></div></div>
       <div class="result-body">
-        ${r.signals.map(s => `
-          <div class="signal-row">
-            <span class="k">${s.k}</span>
-            <span class="v ${s.flag ? 'flag' : 'ok'}">${s.v}</span>
-          </div>
-        `).join('')}
+        ${signalsToShow.map(s => `<div class="signal-row"><span class="k">${s.k}</span><span class="v ${s.flag?'flag':'ok'}">${s.v}</span></div>`).join('')}
       </div>
-      ${transcriptSectionHtml()}
+      ${isQuick ? '' : transcriptSectionHtml() + insightSectionHtml()}
+      <div class="reco-box">
+        <div class="reco-title">คำแนะนำความปลอดภัย</div>
+        <ul class="reco-list">
+          <li>❌ ห้ามโอนเงินทุกกรณี</li>
+          <li>❌ อย่ากดลิงก์หรือติดตั้งแอปพลิเคชันตามคำบอก</li>
+          <li>📞 หากสงสัย ให้วางสายแล้วโทรสอบถามหน่วยงานจริงโดยตรง</li>
+        </ul>
+      </div>
+      <div class="quick-actions">
+        <button class="qa-btn" id="exportPdfBtn">📥 ดาวน์โหลดรายงาน (พิมพ์/PDF)</button>
+        <button class="qa-btn report" id="gotoReportBtn">🚨 แจ้งเบาะแสไปยัง AOC 1441</button>
+        <button class="qa-btn" id="clearScanBtn">🔄 ล้างข้อมูลเพื่อตรวจไฟล์ใหม่</button>
+      </div>
     `;
     result.classList.add('show');
+    document.querySelectorAll('.zone').forEach(z => z.classList.remove('print-zone'));
+    result.closest('.zone').classList.add('print-zone');
     result.scrollIntoView({ behavior:'smooth', block:'nearest' });
+
+    document.getElementById('exportPdfBtn').addEventListener('click', () => window.print());
+    document.getElementById('gotoReportBtn').addEventListener('click', () => goPage('report'));
+    document.getElementById('clearScanBtn').addEventListener('click', () => removeBtn.click());
+
+    saveHistoryEntry(currentFile?.name || 'mic-recording', currentSource, r.score, tier);
   }
+
+  /* ================= History (localStorage) ================= */
+  function loadHistory(){ try{ return JSON.parse(localStorage.getItem('tg_history') || '[]'); }catch(e){ return []; } }
+  function saveHistoryEntry(name, source, score, tier){
+    const list = loadHistory();
+    list.push({ id: Date.now(), date: new Date().toISOString(), name, source, score, tier });
+    localStorage.setItem('tg_history', JSON.stringify(list));
+    renderNotifBadge();
+  }
+  document.getElementById('clearHistoryBtn').addEventListener('click', () => {
+    if(confirm('ล้างประวัติทั้งหมด? ลบแล้วกู้คืนไม่ได้')){ localStorage.removeItem('tg_history'); renderHistory(); renderNotifBadge(); }
+  });
+  document.getElementById('filterTier').addEventListener('change', renderHistory);
+  document.getElementById('filterSort').addEventListener('change', renderHistory);
+
+  function renderHistory(){
+    const tierFilter = document.getElementById('filterTier').value;
+    const sortOrder = document.getElementById('filterSort').value;
+    let list = loadHistory();
+    if(tierFilter !== 'all') list = list.filter(x => x.tier === tierFilter);
+    list.sort((a,b) => sortOrder==='desc' ? new Date(b.date)-new Date(a.date) : new Date(a.date)-new Date(b.date));
+    const body = document.getElementById('historyBody');
+    if(!list.length){ body.innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--muted); padding:26px;">ไม่มีข้อมูล</td></tr>`; return; }
+    body.innerHTML = list.map(x => `
+      <tr>
+        <td>${new Date(x.date).toLocaleString('th-TH')}</td>
+        <td>${x.name}</td>
+        <td>${x.source === 'mic' ? '🎙️ ไมค์' : '📁 อัปโหลด'}</td>
+        <td>${x.score}%</td>
+        <td><span class="tier-pill ${x.tier}">${tierBadge[x.tier]}</span></td>
+      </tr>
+    `).join('');
+  }
+
+  /* ================= Dashboard ================= */
+  function renderDashboard(){
+    const list = loadHistory();
+    document.getElementById('statTotal').textContent = list.length;
+    document.getElementById('statSafe').textContent = list.filter(x=>x.tier==='safe').length;
+    document.getElementById('statWarn').textContent = list.filter(x=>x.tier==='warn').length;
+    document.getElementById('statDanger').textContent = list.filter(x=>x.tier==='danger').length;
+    const recent = [...list].sort((a,b)=>new Date(b.date)-new Date(a.date)).slice(0,6);
+    const box = document.getElementById('dashRecentList');
+    if(!recent.length){ box.innerHTML = `<div class="empty-state">ยังไม่มีประวัติการตรวจจับ — ไปที่ "ตรวจจับเสียง" เพื่อเริ่มวิเคราะห์ไฟล์แรก</div>`; return; }
+    box.innerHTML = recent.map(x => `
+      <div class="recent-row">
+        <span class="recent-name">${x.name}</span>
+        <span class="recent-meta">${new Date(x.date).toLocaleDateString('th-TH')}</span>
+        <span class="tier-pill ${x.tier}">${tierBadge[x.tier]} · ${x.score}%</span>
+      </div>
+    `).join('');
+  }
+
+  function renderNotifBadge(){
+    const list = loadHistory().filter(x => x.tier==='danger').sort((a,b)=>new Date(b.date)-new Date(a.date));
+    const badge = document.getElementById('notifBadge');
+    if(list.length){ badge.style.display='flex'; badge.textContent = list.length > 9 ? '9+' : list.length; }
+    else badge.style.display='none';
+    const notifList = document.getElementById('notifList');
+    if(!list.length){ notifList.innerHTML = `<div class="dropdown-empty">ยังไม่มีรายการความเสี่ยงสูง</div>`; return; }
+    notifList.innerHTML = list.slice(0,5).map(x => `
+      <div class="dropdown-item">${x.name}<div class="sub">${new Date(x.date).toLocaleString('th-TH')} · ${x.score}%</div></div>
+    `).join('');
+  }
+
+  /* ================= Keywords page ================= */
+  document.getElementById('kwGrid').innerHTML = `
+    <div class="kw-card">
+      <h3>มุกข่มขู่ทางกฎหมาย</h3>
+      <p>อ้างเป็นเจ้าหน้าที่รัฐ ข่มขู่เรื่องคดีความเพื่อสร้างความกลัว</p>
+      <div class="kw-tags"><span class="tag">สถานีตำรวจ</span><span class="tag">เจ้าหน้าที่ตำรวจ</span><span class="tag">คดีอาญา</span><span class="tag">ควบคุมตัว</span></div>
+    </div>
+    <div class="kw-card">
+      <h3>มุกการเงิน / โอนเงิน</h3>
+      <p>หลอกให้โอนเงินหรือให้ข้อมูลบัญชีเพื่อ "ตรวจสอบ"</p>
+      <div class="kw-tags"><span class="tag">โอนเงิน</span><span class="tag">อายัดบัญชี</span><span class="tag">ตรวจสอบเงิน</span><span class="tag">บัญชีม้า</span></div>
+    </div>
+    <div class="kw-card">
+      <h3>มุกปลอมหน่วยงาน</h3>
+      <p>แอบอ้างเป็นหน่วยงานทางการเพื่อสร้างความน่าเชื่อถือ</p>
+      <div class="kw-tags"><span class="tag">ปปง</span><span class="tag">ธนาคารแห่งประเทศไทย</span><span class="tag">ฟอกเงิน</span></div>
+    </div>
+    <div class="kw-card">
+      <h3>มุกพัสดุ / ยึดทรัพย์</h3>
+      <p>อ้างพัสดุผิดกฎหมายหรือขู่ยึดทรัพย์สิน</p>
+      <div class="kw-tags"><span class="tag">พัสดุผิดกฎหมาย</span><span class="tag">ยึดทรัพย์</span></div>
+    </div>
+    <div class="kw-card">
+      <h3>มุกขโมยข้อมูล</h3>
+      <p>หลอกขอรหัสหรือให้ติดตั้งแอปควบคุมเครื่อง</p>
+      <div class="kw-tags"><span class="tag">แอปดูดเงิน</span><span class="tag">รหัส OTP</span></div>
+    </div>
+  `;
+
+  /* ================= Report form ================= */
+  document.getElementById('reportForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const name = document.getElementById('rf_name').value || 'ไม่ระบุ';
+    const phone = document.getElementById('rf_phone').value || 'ไม่ระบุ';
+    const detail = document.getElementById('rf_detail').value || '-';
+    const text = `แบบร่างแจ้งเบาะแสคอลเซนเตอร์\nวันที่: ${new Date().toLocaleString('th-TH')}\nผู้แจ้ง: ${name}\nเบอร์ที่ได้รับสาย: ${phone}\nรายละเอียด:\n${detail}\n\n(บันทึกจากหน้าต้นแบบ ThaiGuard Call-Detector — โปรดโทรแจ้งสายด่วน 1441 เพื่อดำเนินการจริง)`;
+    const blob = new Blob([text], { type:'text/plain;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `scam-report-draft-${Date.now()}.txt`;
+    a.click();
+  });
+
+  /* ================= Settings ================= */
+  const sensitivitySlider = document.getElementById('sensitivitySlider');
+  const sensitivityVal = document.getElementById('sensitivityVal');
+  sensitivitySlider.value = localStorage.getItem('tg_sensitivity') || '0';
+  sensitivityVal.textContent = sensitivitySlider.value;
+  sensitivitySlider.addEventListener('input', () => {
+    sensitivityVal.textContent = sensitivitySlider.value;
+    localStorage.setItem('tg_sensitivity', sensitivitySlider.value);
+  });
+  document.querySelectorAll('.settings-lang').forEach(b => b.addEventListener('click', () => applyLang(b.dataset.lang)));
+  document.querySelectorAll('.switch[data-toggle]').forEach(sw => sw.addEventListener('click', () => sw.classList.toggle('on')));
+
+  /* ================= Init ================= */
+  renderNotifBadge();
+  renderHistory();
 </script>
 </body>
 </html>
