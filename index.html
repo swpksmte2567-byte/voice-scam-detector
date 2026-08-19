@@ -370,7 +370,7 @@
     <div class="result" id="result"></div>
 
     <div class="note">
-      <b>หมายเหตุ:</b> หน้านี้เป็นส่วนหน้าบ้าน (frontend) ต้นแบบสำหรับ Demo เท่านั้น รองรับไฟล์เสียง วิดีโอ และอัดเสียงสดจากไมค์ในเบราว์เซอร์ (ต้องเข้าผ่าน HTTPS ไมค์ถึงจะทำงาน) แต่ผลวิเคราะห์ที่แสดงตอนนี้ยังเป็นค่าจำลอง — ยังไม่ได้เชื่อมกับโมเดล LLM/เสียงจริง ขั้นต่อไปคือเชื่อม endpoint ที่รับไฟล์แล้วคืนค่าความเสี่ยงจริงจากฝั่ง backend
+      <b>หมายเหตุ:</b> หน้านี้เป็นส่วนหน้าบ้าน (frontend) ต้นแบบสำหรับ Demo รองรับไฟล์เสียง วิดีโอ และอัดเสียงสดจากไมค์ (ต้องเข้าผ่าน HTTPS ไมค์ถึงจะทำงาน) ผลวิเคราะห์คำนวณจาก <b>ลักษณะคลื่นเสียงจริง</b> ในไฟล์ (ความดัง ความผันผวนของโทนเสียง สัดส่วนช่วงเงียบ จังหวะการพูด) ผ่าน Web Audio API — แต่ยัง <b>ไม่ใช่การถอดคำพูดหรือวิเคราะห์เนื้อหาจริง</b> ขั้นต่อไปคือเชื่อม speech-to-text + LLM backend เพื่อจับคำพูด/รูปแบบสคริปต์หลอกลวงได้แม่นยำขึ้น
     </div>
   </div>
 
@@ -523,42 +523,134 @@
     }
   });
 
-  analyzeBtn.addEventListener('click', () => {
+  analyzeBtn.addEventListener('click', async () => {
     if(!currentFile) return;
     analyzeBtn.disabled = true;
     analyzing.classList.add('show');
     result.classList.remove('show');
 
-    const steps = ['กำลังตัดสัญญาณรบกวน…','กำลังถอดลักษณะน้ำเสียง…','กำลังเทียบรูปแบบสายหลอกลวง…'];
+    const steps = ['กำลังอ่านคลื่นเสียง…','กำลังวัดความดัง/ความผันผวนของโทนเสียง…','กำลังประเมินความเสี่ยง…'];
     let i = 0;
     const stepTimer = setInterval(() => {
       analyzingText.textContent = steps[i % steps.length];
       i++;
     }, 700);
 
-    // NOTE: placeholder timing + mock result — replace with a real fetch()
-    // call to your detection API and render its actual response here.
-    setTimeout(() => {
+    try{
+      const analysis = await analyzeAudioFeatures(currentFile);
       clearInterval(stepTimer);
       analyzing.classList.remove('show');
       analyzeBtn.disabled = false;
-      renderResult(mockAnalyze(currentFile));
-    }, 2400);
+      renderResult(analysis);
+    }catch(err){
+      clearInterval(stepTimer);
+      analyzing.classList.remove('show');
+      analyzeBtn.disabled = false;
+      renderResult(fallbackAnalyze(currentFile));
+    }
   });
 
-  function mockAnalyze(file){
-    // Simple placeholder heuristic just so the demo has varied output.
-    const seed = file.name.length + file.size % 97;
-    const score = seed % 100;
-    const isRisky = score > 45;
+  // ---------- Real acoustic feature analysis (Web Audio API) ----------
+  // This decodes the actual audio track and scores risk from measurable
+  // signal properties (loudness, tone-energy swings, silence ratio, pace).
+  // It is NOT speech/keyword detection — that requires a speech-to-text +
+  // LLM backend. This gives a consistent, content-derived heuristic instead
+  // of the old random/filename-based mock.
+  async function analyzeAudioFeatures(file){
+    const arrayBuffer = await file.arrayBuffer();
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    const ctx = new AudioCtx();
+    let buffer;
+    try{
+      buffer = await ctx.decodeAudioData(arrayBuffer.slice(0));
+    } finally {
+      if(ctx.close) ctx.close();
+    }
+
+    const data = buffer.getChannelData(0);
+    const sr = buffer.sampleRate;
+    const duration = buffer.duration;
+
+    // --- Loudness (RMS) ---
+    let sumSquares = 0;
+    for(let n=0; n<data.length; n++) sumSquares += data[n]*data[n];
+    const rms = Math.sqrt(sumSquares / data.length);
+
+    // --- Windowed energy (for variance / "tone swings") ---
+    const winSec = 0.5;
+    const winSize = Math.max(1, Math.floor(sr * winSec));
+    const windowRms = [];
+    for(let start=0; start<data.length; start+=winSize){
+      const end = Math.min(start+winSize, data.length);
+      let s = 0;
+      for(let n=start; n<end; n++) s += data[n]*data[n];
+      windowRms.push(Math.sqrt(s/(end-start)));
+    }
+    const meanWinRms = windowRms.reduce((a,b)=>a+b,0) / windowRms.length;
+    const variance = windowRms.reduce((a,b)=>a + Math.pow(b-meanWinRms,2), 0) / windowRms.length;
+    const energyVariance = Math.sqrt(variance); // std dev of loudness across time
+
+    // --- Silence ratio ---
+    const silenceThresh = 0.015;
+    let silentSamples = 0;
+    for(let n=0; n<data.length; n++) if(Math.abs(data[n]) < silenceThresh) silentSamples++;
+    const silenceRatio = silentSamples / data.length;
+
+    // --- Zero-crossing rate (proxy for pace / sibilance) ---
+    let crossings = 0;
+    for(let n=1; n<data.length; n++){
+      if((data[n-1] >= 0) !== (data[n] >= 0)) crossings++;
+    }
+    const zcr = crossings / data.length;
+
+    return scoreFromFeatures({ rms, energyVariance, silenceRatio, zcr, duration });
+  }
+
+  // Fallback when the browser/file can't be decoded by Web Audio API
+  // (e.g. some video containers). Uses only file size + duration if the
+  // media element managed to load metadata.
+  function fallbackAnalyze(file){
+    const seconds = (playerAudio.style.display !== 'none' ? playerAudio.duration : playerVideo.duration) || 0;
+    const kbPerSec = seconds > 0 ? (file.size/1024) / seconds : 0;
+    // Low bitrate + very short/very long calls skew slightly higher risk,
+    // purely as a rough stand-in since acoustic features aren't available.
+    let score = 30;
+    if(kbPerSec > 0 && kbPerSec < 8) score += 15;
+    if(seconds > 0 && seconds < 8) score += 10;
+    score = Math.min(92, Math.max(5, score));
+    const risky = score > 50;
     return {
-      risky: isRisky,
-      score: isRisky ? 60 + (score % 35) : 5 + (score % 30),
+      risky, score,
       signals: [
-        { k: 'น้ำเสียงเร่งเร้า / สร้างความกดดัน', v: isRisky ? 'พบ' : 'ไม่พบ', flag: isRisky },
-        { k: 'คำที่มักใช้ในสายหลอกลวง (โอนเงิน/อายัดบัญชี)', v: isRisky ? 'พบ' : 'ไม่พบ', flag: isRisky },
-        { k: 'รูปแบบสคริปต์คอลเซนเตอร์', v: isRisky ? 'ตรงกับรูปแบบที่รู้จัก' : 'ไม่ตรงรูปแบบ', flag: isRisky },
-        { k: 'คุณภาพเสียง / ความยาวไฟล์', v: 'ปกติ', flag: false }
+        { k: 'วิเคราะห์คลื่นเสียงโดยตรง', v: 'ไม่รองรับไฟล์นี้', flag: false },
+        { k: 'ความยาวไฟล์', v: seconds ? `${seconds.toFixed(1)} วินาที` : 'ไม่ทราบ', flag: false },
+        { k: 'อัตราบิต (ประมาณ)', v: kbPerSec ? `${kbPerSec.toFixed(1)} KB/s` : 'ไม่ทราบ', flag: kbPerSec>0 && kbPerSec<8 },
+        { k: 'หมายเหตุ', v: 'ใช้ค่าประมาณแทนคลื่นเสียงจริง', flag: false }
+      ]
+    };
+  }
+
+  function scoreFromFeatures({ rms, energyVariance, silenceRatio, zcr, duration }){
+    // Weighted heuristic — thresholds are illustrative, tuned to spread
+    // typical speech recordings across the range rather than clustering.
+    // Higher energy swings ("เร่งเร้า/กดดัน"), sparse silence (non-stop
+    // talking), and fast pace (high ZCR) push the score up.
+    const swingScore   = Math.min(1, energyVariance / 0.09);      // 0..1
+    const silenceScore = Math.min(1, Math.max(0, (0.25 - silenceRatio) / 0.25)); // less silence -> higher
+    const paceScore    = Math.min(1, Math.max(0, (zcr - 0.03) / 0.12));
+    const loudnessScore= Math.min(1, rms / 0.12);
+
+    const weighted = swingScore*0.35 + silenceScore*0.25 + paceScore*0.25 + loudnessScore*0.15;
+    const score = Math.round(Math.min(96, Math.max(4, weighted*100)));
+    const risky = score > 50;
+
+    return {
+      risky, score,
+      signals: [
+        { k: 'ความผันผวนของโทนเสียง (พลังงานขึ้น-ลงเร็ว)', v: swingScore>0.55 ? 'สูง' : swingScore>0.3 ? 'ปานกลาง' : 'ต่ำ', flag: swingScore>0.55 },
+        { k: 'สัดส่วนช่วงเงียบในบทสนทนา', v: `${Math.round(silenceRatio*100)}%`, flag: silenceRatio < 0.08 },
+        { k: 'จังหวะการพูด (ความถี่การสลับสัญญาณ)', v: paceScore>0.55 ? 'เร็ว' : paceScore>0.3 ? 'ปานกลาง' : 'ปกติ', flag: paceScore>0.55 },
+        { k: 'ความดังเฉลี่ยของเสียง (RMS)', v: loudnessScore>0.6 ? 'ดังผิดปกติ' : 'ปกติ', flag: loudnessScore>0.6 }
       ]
     };
   }
