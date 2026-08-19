@@ -483,11 +483,21 @@
         return;
       }
       recordedChunks = [];
-      mediaRecorder = new MediaRecorder(recordStream);
+      const mimeCandidates = [
+        'audio/mp4',
+        'audio/mp4;codecs=mp4a.40.2',
+        'audio/webm;codecs=opus',
+        'audio/webm',
+        'audio/ogg;codecs=opus'
+      ];
+      const chosenMime = mimeCandidates.find(m => window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(m));
+      mediaRecorder = chosenMime ? new MediaRecorder(recordStream, { mimeType: chosenMime }) : new MediaRecorder(recordStream);
       mediaRecorder.ondataavailable = e => { if(e.data.size > 0) recordedChunks.push(e.data); };
       mediaRecorder.onstop = () => {
-        const blob = new Blob(recordedChunks, { type: 'audio/webm' });
-        const file = new File([blob], `mic-recording-${Date.now()}.webm`, { type: 'audio/webm' });
+        const outType = (mediaRecorder.mimeType || chosenMime || 'audio/webm');
+        const ext = outType.includes('mp4') ? 'm4a' : outType.includes('ogg') ? 'ogg' : 'webm';
+        const blob = new Blob(recordedChunks, { type: outType });
+        const file = new File([blob], `mic-recording-${Date.now()}.${ext}`, { type: outType });
         handleFile(file, 'MIC');
         recordStream.getTracks().forEach(t => t.stop());
       };
