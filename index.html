@@ -299,6 +299,27 @@
   .v.flag{ color: var(--danger); }
   .v.ok{ color: var(--safe); }
 
+  .transcript-box{
+    margin: 0 22px 22px;
+    padding: 14px 16px;
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+  }
+  .transcript-label{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 11px; letter-spacing:.08em; text-transform: uppercase;
+    color: var(--amber); margin-bottom: 8px;
+  }
+  .transcript-text{
+    font-size: 14px; line-height: 1.7; color: var(--text);
+    white-space: pre-wrap; margin: 0;
+  }
+  .transcript-empty{
+    font-size: 13px; line-height: 1.6; color: var(--muted);
+    margin: 0;
+  }
+
   .note{
     margin-top: 18px;
     font-size: 12.5px;
@@ -408,6 +429,8 @@
   }
 
   let currentFile = null;
+  let currentTranscript = null;   // captured only for live mic recordings
+  let currentSource = null;       // 'upload' | 'mic'
 
   ['dragenter','dragover'].forEach(ev =>
     dropzone.addEventListener(ev, e => { e.preventDefault(); dropzone.classList.add('drag'); })
@@ -432,6 +455,8 @@
       return;
     }
     currentFile = file;
+    currentSource = sourceLabel === 'MIC' ? 'mic' : 'upload';
+    if(currentSource === 'upload') currentTranscript = null; // no client-side STT for uploaded files
     fileName.textContent = file.name;
     fileBadge.textContent = sourceLabel || (isVideo ? 'VIDEO' : 'AUDIO');
     const url = URL.createObjectURL(file);
@@ -450,6 +475,8 @@
 
   removeBtn.addEventListener('click', () => {
     currentFile = null;
+    currentTranscript = null;
+    currentSource = null;
     fileInput.value = '';
     fileCard.classList.remove('show');
     result.classList.remove('show');
@@ -502,6 +529,7 @@
         recordStream.getTracks().forEach(t => t.stop());
       };
       mediaRecorder.start();
+      startLiveTranscript();
       isRecording = true;
       recordSeconds = 0;
       recordTime.textContent = formatTime(0);
@@ -519,9 +547,46 @@
       recordTitle.textContent = 'อัดเสียงจากไมโครโฟน';
       recordSub.textContent = 'กดปุ่มเพื่อเริ่มอัด แล้วกดอีกครั้งเพื่อหยุด';
       recordTime.textContent = '00:00';
+      stopLiveTranscript();
       if(mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
     }
   });
+
+  /* ---------- Live speech-to-text (mic recording only) ---------- */
+  // Uses the browser's built-in SpeechRecognition. Only works for LIVE
+  // microphone input — browsers have no API to transcribe an arbitrary
+  // uploaded audio file, so uploads never get an auto transcript here.
+  let speechRecognizer = null;
+  let liveTranscriptFinal = '';
+
+  function startLiveTranscript(){
+    liveTranscriptFinal = '';
+    currentTranscript = null;
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if(!SR) return; // not supported in this browser — handled at render time
+    speechRecognizer = new SR();
+    speechRecognizer.lang = 'th-TH';
+    speechRecognizer.continuous = true;
+    speechRecognizer.interimResults = true;
+    speechRecognizer.onresult = (e) => {
+      let interim = '';
+      for(let i = e.resultIndex; i < e.results.length; i++){
+        const chunk = e.results[i][0].transcript;
+        if(e.results[i].isFinal) liveTranscriptFinal += chunk + ' ';
+        else interim += chunk;
+      }
+      currentTranscript = (liveTranscriptFinal + interim).trim();
+    };
+    speechRecognizer.onerror = () => {};
+    try{ speechRecognizer.start(); }catch(e){}
+  }
+
+  function stopLiveTranscript(){
+    if(speechRecognizer){
+      try{ speechRecognizer.stop(); }catch(e){}
+    }
+    currentTranscript = liveTranscriptFinal.trim() || currentTranscript;
+  }
 
   analyzeBtn.addEventListener('click', async () => {
     if(!currentFile) return;
@@ -655,6 +720,25 @@
     };
   }
 
+  function transcriptSectionHtml(){
+    const hasSTT = !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+    let body;
+    if(currentSource === 'mic' && currentTranscript){
+      body = `<p class="transcript-text">${currentTranscript.replace(/</g,'&lt;')}</p>`;
+    } else if(currentSource === 'mic' && !hasSTT){
+      body = `<p class="transcript-empty">เบราว์เซอร์นี้ไม่รองรับการถอดข้อความสด (ลองใช้ Chrome)</p>`;
+    } else if(currentSource === 'mic'){
+      body = `<p class="transcript-empty">ไม่ได้ยินคำพูดชัดเจนพอที่จะถอดข้อความ</p>`;
+    } else {
+      body = `<p class="transcript-empty">ไฟล์ที่อัปโหลดยังไม่สามารถถอดข้อความได้บนหน้านี้ — เบราว์เซอร์ไม่มีความสามารถถอดเสียงจากไฟล์โดยตรง ต้องเชื่อมต่อ speech-to-text API ฝั่ง backend (เช่น Whisper) จึงจะแสดงบทสนทนาจากไฟล์อัปโหลดได้</p>`;
+    }
+    return `
+      <div class="transcript-box">
+        <div class="transcript-label">บทสนทนา (ถอดข้อความ)</div>
+        ${body}
+      </div>`;
+  }
+
   function renderResult(r){
     const cls = r.risky ? 'risk-high' : 'risk-low';
     const title = r.risky ? 'เข้าข่ายคอลเซนเตอร์หลอกลวง' : 'ไม่พบสัญญาณผิดปกติ';
@@ -676,6 +760,7 @@
           </div>
         `).join('')}
       </div>
+      ${transcriptSectionHtml()}
     `;
     result.classList.add('show');
     result.scrollIntoView({ behavior:'smooth', block:'nearest' });
